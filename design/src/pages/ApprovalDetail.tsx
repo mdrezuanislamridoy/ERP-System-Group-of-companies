@@ -8,18 +8,45 @@ import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { ApprovalTimeline } from '../components/ApprovalTimeline';
 import { approvalSteps, prItems, purchaseRequests } from '../data/operations';
 import { group } from '../data/organization';
+import { recordAuditEvent } from '../data/system';
 import { useApp } from '../contexts/AppContext';
+import { useEntityScope } from '../contexts/EntityScopeContext';
 import { NotFound } from './NotFound';
+import { Unauthorized } from './Unauthorized';
 
 export function ApprovalDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { can } = useApp();
+  const { can, role } = useApp();
+  const { canAccessCompany, canApproveAmount, scope } = useEntityScope();
   const [decision, setDecision] = useState<'approved' | 'rejected' | 'changes' | null>(null);
   const [comment, setComment] = useState('');
 
   const request = purchaseRequests.find((p) => p.id === id);
   if (!request) return <NotFound />;
+
+  // ABAC Scope Check
+  if (!canAccessCompany(request.company)) {
+    const audit = recordAuditEvent({
+      user: role.user || 'Unknown User',
+      action: 'SECURITY_ABAC_DENIAL',
+      resource: `PR:${request.id} (${request.title})`,
+      company: request.company,
+      before: `Attempted access to PR belonging to ${request.company}`,
+      after: 'Blocked: ERR_ABAC_COMPANY_ISOLATION (403 Forbidden)',
+    });
+
+    return (
+      <Unauthorized
+        reasonCode="ERR_ABAC_COMPANY_ISOLATION"
+        attemptedResource={`Purchase Request ${request.id} · ${request.company}`}
+        entityName={request.company}
+        correlationId={audit.correlation}
+      />
+    );
+  }
+
+  const approvalCheck = canApproveAmount(request.amount);
 
   const total = prItems.reduce((sum, i) => sum + i.total, 0);
 
@@ -144,7 +171,16 @@ export function ApprovalDetail() {
                   </Button>
                 </div> :
 
-            <>
+                  {!approvalCheck.allowed && (
+                    <div className="mb-3 rounded border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
+                      <p className="font-semibold">⚠️ Financial Approval Ceiling Exceeded</p>
+                      <p className="mt-0.5">
+                        Amount of ৳{request.amount.toLocaleString('en-IN')} exceeds your approval ceiling of ৳{approvalCheck.limit.toLocaleString('en-IN')}.
+                        Direct approval is disabled; this request must be escalated to Group CFO.
+                      </p>
+                    </div>
+                  )}
+
                   <label htmlFor="approval-comment" className="mb-1.5 block text-sm font-medium text-muted">
                     Comment <span className="text-faint">(required when rejecting)</span>
                   </label>
@@ -157,7 +193,14 @@ export function ApprovalDetail() {
                 className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-base text-ink placeholder:text-faint focus:border-accent focus:outline-none" />
               
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button variant="success" size="md" icon={CheckIcon} onClick={() => setDecision('approved')}>
+                    <Button
+                      variant="success"
+                      size="md"
+                      icon={CheckIcon}
+                      onClick={() => setDecision('approved')}
+                      disabled={!approvalCheck.allowed}
+                      title={!approvalCheck.allowed ? 'Amount exceeds your approval limit' : undefined}
+                    >
                       Approve
                     </Button>
                     <Button variant="danger" size="md" icon={XIcon} onClick={() => setDecision('rejected')}>
@@ -168,9 +211,8 @@ export function ApprovalDetail() {
                     </Button>
                   </div>
                   <p className="mt-3 border-t border-line pt-2.5 text-sm text-muted">
-                    You are acting as <span className="text-ink">Finance Manager</span> for{' '}
-                    <span className="text-ink">{request.company}</span>. Approving routes this request to the Group CFO
-                    because the amount exceeds ৳500,000.
+                    You are acting as <span className="text-ink">{role.title}</span> for{' '}
+                    <span className="text-ink">{request.company}</span>. Approval limit: ৳{approvalCheck.limit === Infinity ? 'Unlimited' : approvalCheck.limit.toLocaleString('en-IN')}.
                   </p>
                 </>
             }

@@ -8,14 +8,15 @@ import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { purchaseRequests } from '../data/operations';
 import { companies, group } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
+import { useEntityScope } from '../contexts/EntityScopeContext';
 import type { PurchaseRequest } from '../types';
 
 export function PurchaseRequests() {
   const navigate = useNavigate();
-  const { can, density, companyId, companyName } = useApp();
+  const { can, density } = useApp();
+  const { filterPurchaseRequests, activeCompanyName } = useEntityScope();
 
-  const scopeName = companyId ? companies.find((c) => c.id === companyId)?.name : null;
-  const scoped = can('group.read') || !scopeName ? purchaseRequests : purchaseRequests.filter((p) => p.company === scopeName);
+  const scoped = filterPurchaseRequests(purchaseRequests);
 
   const columns: Array<Column<PurchaseRequest>> = [
   { key: 'id', header: 'Request', mono: true, sortable: true, hideable: false, value: (p) => p.id, render: (p) => p.id },

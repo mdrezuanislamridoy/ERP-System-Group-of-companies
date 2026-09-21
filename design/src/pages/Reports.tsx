@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/StatusBadge';
 import { TableSkeleton } from '../components/ui/States';
 import { companies, group } from '../data/organization';
 import { formatCurrency } from '../data/finance';
+import { useEntityScope } from '../contexts/EntityScopeContext';
 import { cn } from '../utils/cn';
 
 const REPORTS = [
@@ -21,6 +22,16 @@ const REPORTS = [
 export function Reports() {
   const [selected, setSelected] = useState(REPORTS[0].name);
   const [running, setRunning] = useState(false);
+  const { allowedCompanies, activeCompanyId, activeCompanyName } = useEntityScope();
+
+  const scopedCompanies = activeCompanyId
+    ? allowedCompanies.filter(c => c.id === activeCompanyId)
+    : allowedCompanies;
+
+  const totalRev = scopedCompanies.reduce((s, c) => s + c.revenue, 0);
+  const totalExp = scopedCompanies.reduce((s, c) => s + c.expense, 0);
+  const totalProfit = totalRev - totalExp;
+  const totalMargin = totalRev > 0 ? ((totalProfit / totalRev) * 100).toFixed(1) : '0.0';
 
   const run = () => {
     setRunning(true);
@@ -33,7 +44,7 @@ export function Reports() {
         crumbs={[{ label: group.name, to: '/' }, { label: 'Insights' }, { label: 'Reports' }, { label: selected }]}
         title="Reports"
         description="Parameterised, permission-scoped reports. Large datasets are generated server-side and delivered on completion."
-        meta={<Badge tone="accent">Group scope · ৳ BDT</Badge>}
+        meta={<Badge tone="accent">Scope: {activeCompanyName} ({scopedCompanies.length} entities) · ৳ BDT</Badge>}
         actions={
         <>
             <Button icon={SaveIcon}>Save report</Button>

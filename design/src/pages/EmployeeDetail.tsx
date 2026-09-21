@@ -11,8 +11,11 @@ import { StateBlock } from '../components/ui/States';
 import { employees } from '../data/people';
 import { activity } from '../data/system';
 import { group } from '../data/organization';
+import { recordAuditEvent } from '../data/system';
 import { useApp } from '../contexts/AppContext';
+import { useEntityScope } from '../contexts/EntityScopeContext';
 import { NotFound } from './NotFound';
+import { Unauthorized } from './Unauthorized';
 
 const TABS = [
 { id: 'overview', label: 'Overview' },
@@ -25,11 +28,33 @@ const TABS = [
 export function EmployeeDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { can } = useApp();
+  const { can, role } = useApp();
+  const { canAccessCompany } = useEntityScope();
   const [tab, setTab] = useState('overview');
 
   const employee = employees.find((e) => e.id === id);
   if (!employee) return <NotFound />;
+
+  // ABAC Scope Enforcement: check if employee belongs to an authorized company
+  if (!canAccessCompany(employee.company)) {
+    const audit = recordAuditEvent({
+      user: role.user || 'Unknown User',
+      action: 'SECURITY_ABAC_DENIAL',
+      resource: `EMP:${employee.id} (${employee.name})`,
+      company: employee.company,
+      before: `Attempted direct access to employee in ${employee.company}`,
+      after: 'Blocked: ERR_ABAC_COMPANY_ISOLATION (403 Forbidden)',
+    });
+
+    return (
+      <Unauthorized
+        reasonCode="ERR_ABAC_COMPANY_ISOLATION"
+        attemptedResource={`${employee.name} (${employee.id})`}
+        entityName={employee.company}
+        correlationId={audit.correlation}
+      />
+    );
+  }
 
   return (
     <div className="pb-10">

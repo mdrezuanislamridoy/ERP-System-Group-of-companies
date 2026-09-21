@@ -8,14 +8,15 @@ import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { invoices, formatCurrency } from '../data/finance';
 import { companies, group } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
+import { useEntityScope } from '../contexts/EntityScopeContext';
 import type { Invoice } from '../types';
 
 export function Invoices() {
-  const { can, density, companyId, companyName } = useApp();
+  const { can, density } = useApp();
+  const { filterInvoices, activeCompanyName } = useEntityScope();
   const [tab, setTab] = useState('all');
 
-  const scopeName = companyId ? companies.find((c) => c.id === companyId)?.name : null;
-  const scoped = can('group.read') || !scopeName ? invoices : invoices.filter((i) => i.company === scopeName);
+  const scoped = filterInvoices(invoices);
   const rows =
   tab === 'all' ? scoped : tab === 'payable' ? scoped.filter((i) => i.type === 'Payable') : scoped.filter((i) => i.type === 'Receivable');
 

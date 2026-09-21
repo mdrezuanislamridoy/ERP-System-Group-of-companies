@@ -8,14 +8,15 @@ import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { employees } from '../data/people';
 import { companies, group } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
+import { useEntityScope } from '../contexts/EntityScopeContext';
 import type { Employee } from '../types';
 
 export function Employees() {
   const navigate = useNavigate();
-  const { can, density, companyId } = useApp();
+  const { can, density } = useApp();
+  const { filterEmployees, activeCompanyName, activeBranchName } = useEntityScope();
 
-  const companyName = companyId ? companies.find((c) => c.id === companyId)?.name : null;
-  const scoped = can('group.read') || !companyName ? employees : employees.filter((e) => e.company === companyName);
+  const scoped = filterEmployees(employees);
 
   const columns: Array<Column<Employee>> = [
   {
@@ -49,12 +50,12 @@ export function Employees() {
       <PageHeader
         crumbs={[
         { label: group.name, to: '/' },
-        { label: companyName ?? 'All companies', to: '/companies' },
+        { label: activeCompanyName, to: '/companies' },
         { label: 'Employees' }]
         }
         title="Employees"
         description="Master employee register across every company in your scope."
-        meta={<Badge tone="accent">Scope: {companyName ?? 'All 24 companies'}</Badge>}
+        meta={<Badge tone="accent">Scope: {activeCompanyName} · {activeBranchName} ({scoped.length} people)</Badge>}
         actions={
         can('employee.update') ?
         <Button variant="primary" icon={PlusIcon}>
