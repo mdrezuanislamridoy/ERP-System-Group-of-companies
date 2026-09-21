@@ -74,7 +74,7 @@ export const initialChartOfAccounts: ChartAccount[] = [
   { code: '1150', name: 'Advance Corporate Tax & Prepayments', level: 2, type: 'Asset', openingBalance: 32000000, parentCode: '1100', normalBalance: 'debit' },
   { code: '1500', name: 'Non-Current Assets', level: 1, type: 'Asset', openingBalance: 642000000, parentCode: '1000', normalBalance: 'debit' },
   { code: '1510', name: 'Property, Plant & Equipment', level: 2, type: 'Asset', openingBalance: 780000000, parentCode: '1500', normalBalance: 'debit' },
-  { code: '1520', name: 'Accumulated Depreciation', level: 2, type: 'Asset', openingBalance: -138000000, parentCode: '1500', normalBalance: 'credit' },
+  { code: '1520', name: 'Accumulated Depreciation', level: 2, type: 'Asset', openingBalance: 138000000, parentCode: '1500', normalBalance: 'credit' },
 
   // 2000 LIABILITIES
   { code: '2000', name: 'Liabilities', level: 0, type: 'Liability', openingBalance: 508000000, normalBalance: 'credit' },
@@ -87,11 +87,11 @@ export const initialChartOfAccounts: ChartAccount[] = [
   { code: '2510', name: 'Term Loan Facilities', level: 2, type: 'Liability', openingBalance: 190000000, parentCode: '2500', normalBalance: 'credit' },
 
   // 3000 EQUITY
-  { code: '3000', name: 'Equity', level: 0, type: 'Equity', openingBalance: 776000000, normalBalance: 'credit' },
+  { code: '3000', name: 'Equity', level: 0, type: 'Equity', openingBalance: 559000000, normalBalance: 'credit' },
   { code: '3100', name: 'Share Capital', level: 1, type: 'Equity', openingBalance: 500000000, parentCode: '3000', normalBalance: 'credit' },
   { code: '3110', name: 'Paid-Up Share Capital', level: 2, type: 'Equity', openingBalance: 500000000, parentCode: '3100', normalBalance: 'credit' },
-  { code: '3200', name: 'Reserves & Retained Earnings', level: 1, type: 'Equity', openingBalance: 276000000, parentCode: '3000', normalBalance: 'credit' },
-  { code: '3210', name: 'Retained Earnings', level: 2, type: 'Equity', openingBalance: 276000000, parentCode: '3200', normalBalance: 'credit' },
+  { code: '3200', name: 'Reserves & Retained Earnings', level: 1, type: 'Equity', openingBalance: 59000000, parentCode: '3000', normalBalance: 'credit' },
+  { code: '3210', name: 'Retained Earnings', level: 2, type: 'Equity', openingBalance: 59000000, parentCode: '3200', normalBalance: 'credit' },
 
   // 4000 REVENUE
   { code: '4000', name: 'Revenue', level: 0, type: 'Revenue', openingBalance: 2450000000, normalBalance: 'credit' },

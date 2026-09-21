@@ -208,7 +208,7 @@ export function JournalEntryModal({
             <div>
               <h2 className="text-lg font-bold text-ink">Create Manual Journal Voucher</h2>
               <p className="text-xs text-muted">
-                Record double-entry General Ledger transaction with strict balance validation ($\sum \text{Debit} == \sum \text{Credit}$).
+                Record double-entry General Ledger transaction with strict balance validation (Sum of Debits = Sum of Credits).
               </p>
             </div>
           </div>
