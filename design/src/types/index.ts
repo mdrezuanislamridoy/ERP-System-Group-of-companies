@@ -64,6 +64,83 @@ export interface Invoice {
   status: StatusKey;
 }
 
+// ─── Issue #05: General Ledger & Double-Entry Accounting Types ───────────────
+
+export type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
+
+export interface ChartAccount {
+  code: string;
+  name: string;
+  level: number;
+  type: AccountType;
+  openingBalance: number;
+  debitMovement?: number;
+  creditMovement?: number;
+  closingBalance?: number;
+  parentCode?: string;
+  normalBalance?: 'debit' | 'credit';
+}
+
+export interface JournalLineItem {
+  id: string;
+  accountCode: string;
+  accountName: string;
+  costCenterId: string;
+  costCenterCode: string;
+  debit: number;
+  credit: number;
+  description: string;
+}
+
+export interface JournalEntry {
+  id: string;
+  entryNumber: string;
+  date: string;
+  companyId: string;
+  companyName: string;
+  reference: string;
+  type: 'standard' | 'adjusting' | 'closing' | 'reversing' | 'intercompany';
+  status: 'posted' | 'draft' | 'reversed';
+  memo: string;
+  lines: JournalLineItem[];
+  totalDebit: number;
+  totalCredit: number;
+  createdBy: string;
+  createdAt: string;
+  postedAt: string;
+}
+
+export interface GeneralLedgerPosting {
+  id: string;
+  date: string;
+  journalEntryId: string;
+  journalEntryNumber: string;
+  accountCode: string;
+  accountName: string;
+  accountType: AccountType;
+  costCenterId: string;
+  costCenterCode: string;
+  companyId: string;
+  companyName: string;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+  description: string;
+  reference: string;
+}
+
+export interface TrialBalanceRow {
+  accountCode: string;
+  accountName: string;
+  accountType: AccountType;
+  openingBalance: number;
+  debitMovement: number;
+  creditMovement: number;
+  closingBalance: number;
+  netDebit: number;
+  netCredit: number;
+}
+
 export interface PurchaseRequest {
   id: string;
   title: string;

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/ui/Panel';
@@ -7,16 +7,22 @@ import { Button } from '../components/ui/Button';
 import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { ColumnChart } from '../components/charts/ColumnChart';
 import { DistributionBars } from '../components/charts/DistributionBars';
-import { financeKpis, invoices, revenueTrend, formatCurrency } from '../data/finance';
+import { financeKpis, invoices, revenueTrend, formatCurrency, formatCurrencyFull, journalVouchers } from '../data/finance';
 import { companies, group } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
+import { JournalEntryModal } from '../components/finance/JournalEntryModal';
 
 export function FinanceOverview() {
   const navigate = useNavigate();
   const { companyId, companyName, can } = useApp();
+  const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
+  const [vouchers, setVouchers] = useState(journalVouchers);
 
   const scopeName = companyId ? companies.find((c) => c.id === companyId)?.name : null;
   const scopedInvoices = can('group.read') || !scopeName ? invoices : invoices.filter((i) => i.company === scopeName);
+  const scopedVouchers = can('group.read') || !companyId || companyId === '*' || companyId === 'all'
+    ? vouchers
+    : vouchers.filter((v) => v.companyId === companyId || v.companyId === companyId.replace(/^c-/, 'le-') || v.companyId === companyId.replace(/^le-/, 'c-'));
 
   const ageing = [
   { label: 'Current', value: 1840 },
@@ -34,13 +40,16 @@ export function FinanceOverview() {
         description="Cash, receivables, payables and budget consumption for the current context."
         meta={<Badge tone="accent">Context: {companyName}</Badge>}
         actions={
-        <>
-            <Button onClick={() => navigate('/finance/accounts')}>Chart of accounts</Button>
+          <>
+            <Button onClick={() => navigate('/finance/accounts')}>General Ledger & Accounts</Button>
+            <Button variant="secondary" onClick={() => setIsJournalModalOpen(true)}>
+              + New Journal Voucher
+            </Button>
             {can('invoice.create') &&
-          <Button variant="primary" onClick={() => navigate('/finance/invoices')}>
+              <Button variant="primary" onClick={() => navigate('/finance/invoices')}>
                 New invoice
               </Button>
-          }
+            }
           </>
         } />
       
@@ -131,7 +140,90 @@ export function FinanceOverview() {
             </Panel>
           </div>
         </div>
-      </div>
-    </div>);
 
+        {/* Recent Journal Vouchers Section */}
+        <Panel
+          title="Recent Double-Entry Journal Postings (Vouchers)"
+          description="Strictly balanced transactions posted to the General Ledger"
+          actions={
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="xs" onClick={() => navigate('/finance/accounts')}>
+                View General Ledger & Trial Balance →
+              </Button>
+              <Button variant="secondary" size="xs" onClick={() => setIsJournalModalOpen(true)}>
+                + New Journal Voucher
+              </Button>
+            </div>
+          }
+          bodyClassName="p-0"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-base">
+              <thead>
+                <tr className="border-b border-line bg-surface/40">
+                  {['Voucher #', 'Date', 'Entity', 'Memo / Reference', 'Lines', 'Total Debit', 'Total Credit', 'Status'].map((h, idx) => (
+                    <th
+                      key={h}
+                      className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-faint ${
+                        idx === 5 || idx === 6 ? 'text-right' : 'text-left'
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {scopedVouchers.slice(0, 5).map((v) => (
+                  <tr
+                    key={v.id}
+                    onClick={() => navigate('/finance/accounts')}
+                    className="cursor-pointer border-b border-line/70 transition-colors duration-100 ease-out last:border-b-0 hover:bg-surface"
+                  >
+                    <td className="px-4 py-2.5 font-mono text-sm font-medium text-accent">
+                      {v.entryNumber}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-muted">
+                      {v.date}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-ink">
+                      {v.companyName}
+                    </td>
+                    <td className="px-4 py-2.5 text-sm text-ink max-w-md truncate">
+                      <span>{v.memo}</span>
+                      {v.reference && (
+                        <span className="ml-2 font-mono text-xs text-muted">({v.reference})</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-muted font-mono">
+                      {v.lines.length} lines
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular text-sm text-ink">
+                      {formatCurrencyFull(v.totalDebit)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular text-sm text-ink">
+                      {formatCurrencyFull(v.totalCredit)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Badge tone={v.status === 'posted' ? 'success' : 'warning'}>
+                        {v.status.toUpperCase()}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </div>
+
+      <JournalEntryModal
+        isOpen={isJournalModalOpen}
+        onClose={() => setIsJournalModalOpen(false)}
+        onSuccess={() => {
+          setVouchers([...journalVouchers]);
+        }}
+      />
+    </div>
+  );
 }
