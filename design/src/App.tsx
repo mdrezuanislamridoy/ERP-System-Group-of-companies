@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { EntityScopeProvider } from './contexts/EntityScopeContext';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { AppShell } from './components/shell/AppShell';
 import { Login } from './pages/Login';
@@ -53,10 +54,12 @@ interface AppProps {
 
 function Shell({ density }: {density: 'comfortable' | 'compact';}) {
   return (
-    <AppProvider density={density}>
-      <Outlet />
-    </AppProvider>);
-
+    <EntityScopeProvider>
+      <AppProvider density={density}>
+        <Outlet />
+      </AppProvider>
+    </EntityScopeProvider>
+  );
 }
 
 export function App({ density = 'comfortable' }: AppProps) {
