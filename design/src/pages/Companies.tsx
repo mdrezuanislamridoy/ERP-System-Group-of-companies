@@ -21,6 +21,7 @@ import {
   orgGroup,
 } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
+import { useEntityScope } from '../contexts/EntityScopeContext';
 import { cn } from '../utils/cn';
 import type { LegalEntity } from '../types';
 
@@ -271,6 +272,12 @@ function EntityRow({ le }: { le: LegalEntity }) {
 
 export function Companies() {
   const { can } = useApp();
+  const { canAccessCompany, activeCompanyName } = useEntityScope();
+
+  const isGroupScoped = can('group.read');
+  const visibleEntities = isGroupScoped
+    ? legalEntities
+    : legalEntities.filter(le => canAccessCompany(le.id));
 
   return (
     <div className="pb-10">
@@ -278,7 +285,7 @@ export function Companies() {
         crumbs={[{ label: group.name, to: '/' }, { label: 'Organization' }, { label: 'Legal Entities' }]}
         title="Legal Entities"
         description="All operating companies in the group. Click any row to drill down into Business Units, Branches, and Cost Centers."
-        meta={<Badge tone="accent">{legalEntities.length} legal entities · 6 enabled sectors</Badge>}
+        meta={<Badge tone="accent">{visibleEntities.length} legal entities · {isGroupScoped ? 'Group Scope' : `Scoped to ${activeCompanyName}`}</Badge>}
         actions={
           can('company.manage') ? (
             <Button variant="primary" icon={PlusIcon}>Add legal entity</Button>
@@ -288,7 +295,7 @@ export function Companies() {
 
       <div className="px-6">
         {/* Group-level summary */}
-        <GroupSummary />
+        {isGroupScoped && <GroupSummary />}
 
         {/* Entity table with drill-down rows */}
         <div className="overflow-x-auto rounded-lg border border-line bg-subtle">
@@ -310,7 +317,7 @@ export function Companies() {
               </tr>
             </thead>
             <tbody>
-              {legalEntities.map(le => (
+              {visibleEntities.map(le => (
                 <EntityRow key={le.id} le={le} />
               ))}
             </tbody>

@@ -171,6 +171,7 @@ export function ApprovalDetail() {
                   </Button>
                 </div> :
 
+                <>
                   {!approvalCheck.allowed && (
                     <div className="mb-3 rounded border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
                       <p className="font-semibold">⚠️ Financial Approval Ceiling Exceeded</p>

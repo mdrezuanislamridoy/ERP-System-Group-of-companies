@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import type { RoleKey, UserScope } from '../types';
+import type { RoleKey, UserScope, ModuleKey } from '../types';
 import type { Assignment } from '../data/directory';
 import { roleTemplates } from '../data/roles';
 import { group } from '../data/organization';
@@ -56,6 +56,7 @@ interface AppContextValue {
   notificationsOpen: boolean;
   setNotificationsOpen: (open: boolean) => void;
   density: 'comfortable' | 'compact';
+  isModuleEnabled: (moduleKey?: ModuleKey, companyId?: string | null) => boolean;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -74,7 +75,8 @@ export function AppProvider({ children, density }: ProviderProps) {
     activeBranchId,
     activeBranchName,
     setActiveBranchId,
-    scope
+    scope,
+    isModuleEnabled
   } = useEntityScope();
 
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -119,7 +121,8 @@ export function AppProvider({ children, density }: ProviderProps) {
       setPaletteOpen,
       notificationsOpen,
       setNotificationsOpen,
-      density
+      density,
+      isModuleEnabled
     }),
     [
       role,
@@ -136,7 +139,8 @@ export function AppProvider({ children, density }: ProviderProps) {
       authSwitchAssignment,
       paletteOpen,
       notificationsOpen,
-      density
+      density,
+      isModuleEnabled
     ]
   );
 

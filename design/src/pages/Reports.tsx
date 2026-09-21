@@ -127,9 +127,9 @@ export function Reports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {companies.map((c) =>
+                  {scopedCompanies.map((c) =>
                 <tr key={c.id} className="border-b border-line/70 last:border-b-0 hover:bg-surface">
-                      <td className="px-4 py-2 text-ink">{c.name}</td>
+                      <td className="px-4 py-2 text-ink font-medium">{c.name}</td>
                       <td className="px-4 py-2 text-right font-mono tabular text-ink">{formatCurrency(c.revenue * 100000)}</td>
                       <td className="px-4 py-2 text-right font-mono tabular text-muted">{formatCurrency(c.expense * 100000)}</td>
                       <td className="px-4 py-2 text-right font-mono tabular text-ink">
@@ -148,11 +148,11 @@ export function Reports() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-line bg-surface">
-                    <td className="px-4 py-2 font-medium text-ink">Total</td>
-                    <td className="px-4 py-2 text-right font-mono tabular font-semibold text-ink">৳245.00 Cr</td>
-                    <td className="px-4 py-2 text-right font-mono tabular text-muted">৳182.00 Cr</td>
-                    <td className="px-4 py-2 text-right font-mono tabular font-semibold text-ink">৳63.00 Cr</td>
-                    <td className="px-4 py-2 text-right font-mono tabular text-success">25.7%</td>
+                    <td className="px-4 py-2 font-medium text-ink">Total ({scopedCompanies.length})</td>
+                    <td className="px-4 py-2 text-right font-mono tabular font-semibold text-ink">{formatCurrency(totalRev * 100000)}</td>
+                    <td className="px-4 py-2 text-right font-mono tabular text-muted">{formatCurrency(totalExp * 100000)}</td>
+                    <td className="px-4 py-2 text-right font-mono tabular font-semibold text-ink">{formatCurrency(totalProfit * 100000)}</td>
+                    <td className="px-4 py-2 text-right font-mono tabular text-success">{totalMargin}%</td>
                   </tr>
                 </tfoot>
               </table>

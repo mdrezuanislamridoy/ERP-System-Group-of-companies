@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { Company, Employee, Invoice, PurchaseRequest, StockItem, UserScope } from '../types';
+import type { Company, Employee, Invoice, PurchaseRequest, StockItem, UserScope, ModuleKey } from '../types';
 import { companies, legalEntities, branchPlants, group } from '../data/organization';
+import { recordAuditEvent } from '../data/system';
 import { useAuth } from './AuthContext';
 
 export interface ScopeBranchItem {
@@ -63,6 +64,12 @@ export interface EntityScopeContextValue {
   filterInvoices: (list: Invoice[]) => Invoice[];
   filterPurchaseRequests: (list: PurchaseRequest[]) => PurchaseRequest[];
   filterStock: (list: StockItem[]) => StockItem[];
+
+  // ─── Module & Feature Configuration Engine (ORG-04) ───────────────────────
+  companyModules: Record<string, ModuleKey[]>;
+  isModuleEnabled: (moduleKey?: ModuleKey, companyId?: string | null) => boolean;
+  toggleCompanyModule: (companyId: string, moduleKey: ModuleKey, enabled: boolean) => void;
+  setCompanyModulesPreset: (companyId: string, modules: ModuleKey[]) => void;
 }
 
 const EntityScopeContext = createContext<EntityScopeContextValue | null>(null);
@@ -113,6 +120,16 @@ export function EntityScopeProvider({ children }: { children: React.ReactNode })
 
   const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(initialCompanyId);
   const [activeBranchId, setActiveBranchIdState] = useState<string | null>(null);
+
+  // ─── Dynamic Module Configuration State (ORG-04) ───────────────────────────
+  const [companyModules, setCompanyModules] = useState<Record<string, ModuleKey[]>>(() => {
+    const map: Record<string, ModuleKey[]> = {};
+    companies.forEach((c) => {
+      map[c.id] = [...c.enabledModules];
+      map[c.id.replace(/^c-/, 'le-')] = [...c.enabledModules];
+    });
+    return map;
+  });
 
   // Sync when assignment changes
   useEffect(() => {
@@ -348,6 +365,71 @@ export function EntityScopeProvider({ children }: { children: React.ReactNode })
     });
   }, [activeBranchId, allowedBranches]);
 
+  // ─── Module Configuration Handlers (ORG-04) ─────────────────────────────────
+  const isModuleEnabled = useCallback((moduleKey?: ModuleKey, targetCompanyId?: string | null): boolean => {
+    if (!moduleKey) return true;
+    const effectiveCo = targetCompanyId !== undefined ? targetCompanyId : activeCompanyId;
+    if (!effectiveCo || effectiveCo === '*' || effectiveCo === 'all') {
+      // Group consolidated view: enabled if any company in scope has it enabled
+      return Object.values(companyModules).some(mods => mods.includes(moduleKey));
+    }
+    const norm = normalizeCompanyId(effectiveCo);
+    if (!norm) return true;
+    const mods = companyModules[norm] || companyModules[norm.replace(/^c-/, 'le-')] || [];
+    return mods.includes(moduleKey);
+  }, [activeCompanyId, companyModules]);
+
+  const toggleCompanyModule = useCallback((companyId: string, moduleKey: ModuleKey, enabled: boolean) => {
+    const norm = normalizeCompanyId(companyId) || companyId;
+    const altNorm = norm.startsWith('c-') ? norm.replace(/^c-/, 'le-') : norm.replace(/^le-/, 'c-');
+    const targetCo = companies.find(c => c.id === norm || c.id === altNorm);
+    const coName = targetCo ? targetCo.name : norm;
+
+    setCompanyModules(prev => {
+      const currentList = prev[norm] || targetCo?.enabledModules || [];
+      const updated = enabled
+        ? (currentList.includes(moduleKey) ? currentList : [...currentList, moduleKey])
+        : currentList.filter(m => m !== moduleKey);
+
+      return {
+        ...prev,
+        [norm]: updated,
+        [altNorm]: updated,
+      };
+    });
+
+    recordAuditEvent({
+      user: assignment?.title || 'Group IT Admin',
+      action: 'MODULE_TOGGLED',
+      resource: `${coName} → Module: ${moduleKey.toUpperCase()}`,
+      company: coName,
+      before: `enabled: ${!enabled}`,
+      after: `enabled: ${enabled}`,
+    });
+  }, [assignment?.title]);
+
+  const setCompanyModulesPreset = useCallback((companyId: string, modules: ModuleKey[]) => {
+    const norm = normalizeCompanyId(companyId) || companyId;
+    const altNorm = norm.startsWith('c-') ? norm.replace(/^c-/, 'le-') : norm.replace(/^le-/, 'c-');
+    const targetCo = companies.find(c => c.id === norm || c.id === altNorm);
+    const coName = targetCo ? targetCo.name : norm;
+
+    setCompanyModules(prev => ({
+      ...prev,
+      [norm]: [...modules],
+      [altNorm]: [...modules],
+    }));
+
+    recordAuditEvent({
+      user: assignment?.title || 'Group IT Admin',
+      action: 'MODULE_PRESET_APPLIED',
+      resource: `${coName} → Applied Preset (${modules.length} modules)`,
+      company: coName,
+      before: 'Custom',
+      after: `Enabled modules: ${modules.join(', ')}`,
+    });
+  }, [assignment?.title]);
+
   const value = useMemo<EntityScopeContextValue>(() => ({
     scope,
     activeCompanyId,
@@ -368,6 +450,10 @@ export function EntityScopeProvider({ children }: { children: React.ReactNode })
     filterInvoices,
     filterPurchaseRequests,
     filterStock,
+    companyModules,
+    isModuleEnabled,
+    toggleCompanyModule,
+    setCompanyModulesPreset,
   }), [
     scope,
     activeCompanyId,
@@ -388,6 +474,10 @@ export function EntityScopeProvider({ children }: { children: React.ReactNode })
     filterInvoices,
     filterPurchaseRequests,
     filterStock,
+    companyModules,
+    isModuleEnabled,
+    toggleCompanyModule,
+    setCompanyModulesPreset,
   ]);
 
   return <EntityScopeContext.Provider value={value}>{children}</EntityScopeContext.Provider>;

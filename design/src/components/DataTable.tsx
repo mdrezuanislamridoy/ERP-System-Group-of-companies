@@ -44,6 +44,7 @@ interface DataTableProps<T> {
   bulkActions?: React.ReactNode;
   toolbarRight?: React.ReactNode;
   onRowClick?: (row: T) => void;
+  onExport?: () => void;
   pageSize?: number;
   loading?: boolean;
   emptyTitle?: string;
@@ -204,7 +205,7 @@ export function DataTable<T>({
               </div>
             }
           </div>
-          <Button variant="secondary" size="sm" icon={DownloadIcon}>
+          <Button variant="secondary" size="sm" icon={DownloadIcon} onClick={onExport}>
             Export
           </Button>
           {onCreate &&

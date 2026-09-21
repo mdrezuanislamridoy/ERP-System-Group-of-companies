@@ -28,6 +28,7 @@ export interface Company {
   margin: number;
   status: StatusKey;
   modules: string[];
+  enabledModules: ModuleKey[];
 }
 
 export interface Employee {
@@ -44,6 +45,11 @@ export interface Employee {
   manager: string;
   grade: string;
   location: string;
+  baseSalary?: number;
+  bankName?: string;
+  bankAccount?: string;
+  nid?: string;
+  tin?: string;
 }
 
 export interface Invoice {
@@ -236,6 +242,26 @@ export type ModuleKey =
   | 'assets'
   | 'maintenance'
   | 'retail-pos';
+
+export const MODULE_METADATA: Record<
+  ModuleKey,
+  { label: string; description: string; category: 'Operations' | 'Finance' | 'People' | 'Commerce' }
+> = {
+  finance: { label: 'Finance & Accounting', description: 'General ledger, charts of accounts, financial reports, tax', category: 'Finance' },
+  hr: { label: 'Human Resources', description: 'Employee lifecycle, attendance, leave management, shifts', category: 'People' },
+  payroll: { label: 'Payroll & Compensation', description: 'Salary disbursements, deductions, tax withholding, payslips', category: 'Finance' },
+  procurement: { label: 'Procurement & Purchasing', description: 'Purchase requisitions, vendor POs, RFQs, goods receipt', category: 'Operations' },
+  inventory: { label: 'Inventory & Warehousing', description: 'Multi-warehouse stock, lot tracking, stock transfers, valuations', category: 'Operations' },
+  manufacturing: { label: 'Manufacturing & Production', description: 'BOMs, work orders, routing, plant floor management', category: 'Operations' },
+  quality: { label: 'Quality Assurance & QC', description: 'Inspection plans, quality certificates, non-conformance logs', category: 'Operations' },
+  sales: { label: 'Sales & Distribution', description: 'Customer orders, delivery orders, invoicing, channel sales', category: 'Commerce' },
+  crm: { label: 'CRM & Client Pipeline', description: 'Lead tracking, deal pipeline, client accounts, communications', category: 'Commerce' },
+  projects: { label: 'Projects & Timesheets', description: 'Project milestones, task tracking, billable timesheets, deliverables', category: 'Operations' },
+  fleet: { label: 'Fleet & Logistics', description: 'Vehicle register, route dispatch, fuel logs, driver tracking', category: 'Operations' },
+  assets: { label: 'Fixed Assets Management', description: 'Asset register, depreciation schedules, maintenance logs', category: 'Operations' },
+  maintenance: { label: 'Plant Maintenance', description: 'Preventative maintenance schedules, breakdown logs, work orders', category: 'Operations' },
+  'retail-pos': { label: 'Retail Point-of-Sale (POS)', description: 'Store billing, cash drawer, retail barcode checkout, daily register', category: 'Commerce' },
+};
 
 // ─── Issue #02: ABAC Scoping & Company-Level Data Isolation ──────────────────
 

@@ -9,6 +9,8 @@ import { Badge } from '../components/ui/StatusBadge';
 import { effectivePermissions, sessions } from '../data/system';
 import { companies, group } from '../data/organization';
 import { roleTemplates } from '../data/roles';
+import { employees } from '../data/people';
+import { SensitiveField } from '../components/common/SensitiveField';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../utils/cn';
@@ -60,35 +62,98 @@ export function Profile() {
       </div>
 
       <div className="p-6">
-        {tab === 'profile' &&
-        <div className="grid gap-4 lg:grid-cols-3">
-            <Panel title="Personal information">
-              <dl>
-                <KeyValue label="Full name" value={role.user} />
-                <KeyValue label="Work email" value={user.email} />
-                <KeyValue label="Employee ID" value={user.employeeId} mono />
-              </dl>
-            </Panel>
-            <Panel title="Employment">
-              <dl>
-                <KeyValue label="Position" value={role.title} />
-                <KeyValue label="Department" value={user.department} />
-                <KeyValue label="Branch" value={user.branch} />
-              </dl>
-            </Panel>
-            <Panel title="Organization context">
-              <dl>
-                <KeyValue label="Group" value={group.name} />
-                <KeyValue label="Active company" value={companyName(activeCompanyId)} />
-                <KeyValue label="Access scope" value={role.scopeLabel} />
-              </dl>
-              <p className="mt-3 rounded border border-line bg-canvas px-3 py-2 text-sm text-muted">
-                Actions you take apply to this workspace. Switch workspaces from the top bar before creating or
-                approving records under a different role or company.
-              </p>
-            </Panel>
-          </div>
-        }
+        {tab === 'profile' && (() => {
+          const emp = employees.find((e) => e.id === user.employeeId || e.email === user.email) || employees[0];
+          return (
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Panel title="Personal information">
+                <dl>
+                  <KeyValue label="Full name" value={role.user} />
+                  <KeyValue label="Work email" value={user.email} />
+                  <KeyValue label="Employee ID" value={user.employeeId} mono />
+                  <KeyValue
+                    label="National ID (NID)"
+                    value={
+                      <SensitiveField
+                        value={emp?.nid || '4192-8830-1049'}
+                        permission="sensitive.nid.read"
+                        domain="nid"
+                        label="Personal NID"
+                        resourceName={`${user.personName} (${user.employeeId})`}
+                        companyName={companyName(activeCompanyId)}
+                        format="nid"
+                        mono
+                      />
+                    }
+                  />
+                  <KeyValue
+                    label="Tax ID (TIN)"
+                    value={
+                      <SensitiveField
+                        value={emp?.tin || '883920192841'}
+                        permission="sensitive.nid.read"
+                        domain="tin"
+                        label="Tax ID (TIN)"
+                        resourceName={`${user.personName} (${user.employeeId})`}
+                        companyName={companyName(activeCompanyId)}
+                        format="tin"
+                        mono
+                      />
+                    }
+                  />
+                </dl>
+              </Panel>
+              <Panel title="Employment">
+                <dl>
+                  <KeyValue label="Position" value={role.title} />
+                  <KeyValue label="Department" value={user.department} />
+                  <KeyValue label="Branch" value={user.branch} />
+                  <KeyValue
+                    label="Base Salary"
+                    value={
+                      <SensitiveField
+                        value={emp?.baseSalary || 145000}
+                        permission="sensitive.salary.read"
+                        domain="salary"
+                        label="Base Salary"
+                        resourceName={`${user.personName} (${user.employeeId})`}
+                        companyName={companyName(activeCompanyId)}
+                        format="currency"
+                        mono
+                      />
+                    }
+                  />
+                  <KeyValue
+                    label="Bank Account"
+                    value={
+                      <SensitiveField
+                        value={emp?.bankAccount || '01-8834921-01'}
+                        permission="sensitive.bank.read"
+                        domain="bank"
+                        label="Salary Bank Account"
+                        resourceName={`${user.personName} (${user.employeeId})`}
+                        companyName={companyName(activeCompanyId)}
+                        format="bank"
+                        mono
+                      />
+                    }
+                  />
+                </dl>
+              </Panel>
+              <Panel title="Organization context">
+                <dl>
+                  <KeyValue label="Group" value={group.name} />
+                  <KeyValue label="Active company" value={companyName(activeCompanyId)} />
+                  <KeyValue label="Access scope" value={role.scopeLabel} />
+                </dl>
+                <p className="mt-3 rounded border border-line bg-canvas px-3 py-2 text-sm text-muted">
+                  Actions you take apply to this workspace. Switch workspaces from the top bar before creating or
+                  approving records under a different role or company.
+                </p>
+              </Panel>
+            </div>
+          );
+        })()}
 
         {tab === 'permissions' &&
         <div className="space-y-4">

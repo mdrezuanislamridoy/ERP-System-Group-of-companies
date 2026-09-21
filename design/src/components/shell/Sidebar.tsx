@@ -11,14 +11,21 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const { can, roleKey } = useApp();
+  const { can, roleKey, isModuleEnabled } = useApp();
   const location = useLocation();
   const [open, setOpen] = useState<string[]>(['Accounting']);
 
   const sections = roleKey === 'employee' ? employeeNavigation : navigation;
-  const visible = sections.
-  map((s) => ({ ...s, items: s.items.filter((i) => !i.permission || can(i.permission)) })).
-  filter((s) => s.items.length > 0);
+  const visible = sections
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((i) => {
+        if (i.permission && !can(i.permission)) return false;
+        if (i.module && !isModuleEnabled(i.module)) return false;
+        return true;
+      }),
+    }))
+    .filter((s) => s.items.length > 0);
 
   const isActive = (to?: string) =>
   to ? to === '/' ? location.pathname === '/' : location.pathname.startsWith(to.split('?')[0]) : false;

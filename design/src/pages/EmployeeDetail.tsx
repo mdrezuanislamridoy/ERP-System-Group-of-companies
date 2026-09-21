@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 import { StateBlock } from '../components/ui/States';
+import { SensitiveField } from '../components/common/SensitiveField';
 import { employees } from '../data/people';
 import { activity } from '../data/system';
 import { group } from '../data/organization';
@@ -103,6 +104,36 @@ export function EmployeeDetail() {
                   <KeyValue label="Full name" value={employee.name} />
                   <KeyValue label="Work email" value={employee.email} />
                   <KeyValue label="Phone" value={employee.phone} mono />
+                  <KeyValue
+                    label="National ID (NID)"
+                    value={
+                      <SensitiveField
+                        value={employee.nid}
+                        permission="sensitive.nid.read"
+                        domain="nid"
+                        label="National ID"
+                        resourceName={`${employee.name} (${employee.id})`}
+                        companyName={employee.company}
+                        format="nid"
+                        mono
+                      />
+                    }
+                  />
+                  <KeyValue
+                    label="Tax ID (TIN)"
+                    value={
+                      <SensitiveField
+                        value={employee.tin}
+                        permission="sensitive.nid.read"
+                        domain="tin"
+                        label="Tax ID (TIN)"
+                        resourceName={`${employee.name} (${employee.id})`}
+                        companyName={employee.company}
+                        format="tin"
+                        mono
+                      />
+                    }
+                  />
                   <KeyValue label="Location" value={employee.location} />
                 </dl>
               </Panel>
@@ -112,6 +143,40 @@ export function EmployeeDetail() {
                   <KeyValue label="Position" value={employee.position} />
                   <KeyValue label="Grade" value={employee.grade} mono />
                   <KeyValue label="Joined" value={employee.joined} />
+                  <KeyValue
+                    label="Base Salary"
+                    value={
+                      <SensitiveField
+                        value={employee.baseSalary}
+                        permission="sensitive.salary.read"
+                        domain="salary"
+                        label="Base Salary"
+                        resourceName={`${employee.name} (${employee.id})`}
+                        companyName={employee.company}
+                        format="currency"
+                        mono
+                      />
+                    }
+                  />
+                  <KeyValue
+                    label="Disbursement Bank"
+                    value={employee.bankName || 'Standard Chartered Bank'}
+                  />
+                  <KeyValue
+                    label="Bank Account"
+                    value={
+                      <SensitiveField
+                        value={employee.bankAccount}
+                        permission="sensitive.bank.read"
+                        domain="bank"
+                        label="Bank Account"
+                        resourceName={`${employee.name} (${employee.id})`}
+                        companyName={employee.company}
+                        format="bank"
+                        mono
+                      />
+                    }
+                  />
                 </dl>
               </Panel>
               <Panel title="Organization">
@@ -213,9 +278,31 @@ export function EmployeeDetail() {
               map((row) =>
               <tr key={row[0]} className="border-b border-line/70 last:border-b-0">
                       <td className="px-4 py-2 text-ink">{row[0]}</td>
-                      <td className="px-4 py-2 font-mono tabular text-ink">৳{row[1]}</td>
+                      <td className="px-4 py-2 font-mono tabular text-ink">
+                        <SensitiveField
+                          value={row[1]}
+                          permission="sensitive.salary.read"
+                          domain="salary"
+                          label={`Gross Pay (${row[0]})`}
+                          resourceName={`${employee.name} (${employee.id})`}
+                          companyName={employee.company}
+                          format="currency"
+                          mono
+                        />
+                      </td>
                       <td className="px-4 py-2 font-mono tabular text-muted">−৳{row[2]}</td>
-                      <td className="px-4 py-2 font-mono tabular text-ink">৳{row[3]}</td>
+                      <td className="px-4 py-2 font-mono tabular text-ink">
+                        <SensitiveField
+                          value={row[3]}
+                          permission="sensitive.salary.read"
+                          domain="salary"
+                          label={`Net Pay (${row[0]})`}
+                          resourceName={`${employee.name} (${employee.id})`}
+                          companyName={employee.company}
+                          format="currency"
+                          mono
+                        />
+                      </td>
                       <td className="px-4 py-2">
                         <StatusBadge status={row[4] as 'completed'} />
                       </td>

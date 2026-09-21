@@ -1,13 +1,19 @@
 import type React from 'react';
+import type { ModuleKey } from '../types';
 import {
   ActivityIcon,
   BarChart3Icon,
   BoxesIcon,
+  BriefcaseIcon,
   BuildingIcon,
   CalendarCheckIcon,
+  CarIcon,
+  CheckCircle2Icon,
   CircleDollarSignIcon,
   ClipboardListIcon,
+  FactoryIcon,
   FileTextIcon,
+  FolderKanbanIcon,
   GitBranchIcon,
   LayoutDashboardIcon,
   ListTreeIcon,
@@ -16,6 +22,7 @@ import {
   ScrollTextIcon,
   SettingsIcon,
   ShieldCheckIcon,
+  ShoppingBagIcon,
   TruckIcon,
   UserCircleIcon,
   UsersIcon,
@@ -27,6 +34,7 @@ export interface NavItem {
   to?: string;
   icon?: React.ComponentType<{className?: string;}>;
   permission?: string;
+  module?: ModuleKey;
   badge?: number;
   children?: NavItem[];
 }
@@ -49,7 +57,7 @@ export const navigation: NavSection[] = [
   label: 'Organization',
   items: [
   { label: 'Companies', to: '/companies', icon: BuildingIcon, permission: 'group.read' },
-  { label: 'Employees', to: '/employees', icon: UsersIcon, permission: 'employee.read' },
+  { label: 'Employees', to: '/employees', icon: UsersIcon, permission: 'employee.read', module: 'hr' },
   { label: 'Organization Chart', to: '/org-chart', icon: NetworkIcon, permission: 'group.read' }]
 
 },
@@ -60,28 +68,34 @@ export const navigation: NavSection[] = [
     label: 'Accounting',
     icon: CircleDollarSignIcon,
     permission: 'finance.read',
+    module: 'finance',
     children: [
     { label: 'Overview', to: '/finance' },
     { label: 'Chart of Accounts', to: '/finance/accounts' }]
 
   },
-  { label: 'Invoices', to: '/finance/invoices', icon: ReceiptIcon, permission: 'invoice.read' },
-  { label: 'Reports', to: '/reports', icon: BarChart3Icon, permission: 'reports.read' }]
+  { label: 'Invoices', to: '/finance/invoices', icon: ReceiptIcon, permission: 'invoice.read', module: 'finance' },
+  { label: 'Reports', to: '/reports', icon: BarChart3Icon, permission: 'reports.read', module: 'finance' }]
 
 },
 {
   label: 'Operations',
   items: [
-  { label: 'Procurement', to: '/procurement', icon: TruckIcon, permission: 'pr.read' },
-  { label: 'Purchase Requests', to: '/procurement/requests', icon: FileTextIcon, permission: 'pr.read' },
-  { label: 'Inventory', to: '/inventory', icon: BoxesIcon, permission: 'inventory.read' },
-  { label: 'Warehouses', to: '/inventory/warehouses', icon: WarehouseIcon, permission: 'inventory.read' }]
+  { label: 'Procurement', to: '/procurement', icon: TruckIcon, permission: 'pr.read', module: 'procurement' },
+  { label: 'Purchase Requests', to: '/procurement/requests', icon: FileTextIcon, permission: 'pr.read', module: 'procurement' },
+  { label: 'Inventory', to: '/inventory', icon: BoxesIcon, permission: 'inventory.read', module: 'inventory' },
+  { label: 'Warehouses', to: '/inventory/warehouses', icon: WarehouseIcon, permission: 'inventory.read', module: 'inventory' },
+  { label: 'Manufacturing', to: '/manufacturing', icon: FactoryIcon, permission: 'inventory.read', module: 'manufacturing' },
+  { label: 'Quality Control', to: '/quality', icon: CheckCircle2Icon, permission: 'inventory.read', module: 'quality' },
+  { label: 'Fleet & Transport', to: '/fleet', icon: CarIcon, permission: 'pr.read', module: 'fleet' },
+  { label: 'Projects & Tasks', to: '/projects', icon: FolderKanbanIcon, permission: 'self.read', module: 'projects' },
+  { label: 'Retail POS', to: '/retail', icon: ShoppingBagIcon, permission: 'inventory.read', module: 'retail-pos' }]
 
 },
 {
   label: 'People',
   items: [
-  { label: 'Attendance & Leave', to: '/hr', icon: CalendarCheckIcon, permission: 'employee.read' }]
+  { label: 'Attendance & Leave', to: '/hr', icon: CalendarCheckIcon, permission: 'employee.read', module: 'hr' }]
 
 },
 {
