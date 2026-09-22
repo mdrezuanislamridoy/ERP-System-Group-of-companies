@@ -580,6 +580,8 @@ export interface ApprovalNote {
   at: string;
   text: string;
   decision?: 'approved' | 'rejected';
+  /** Set when `author` acted under an active DelegationRule — who they were standing in for. */
+  actingFor?: string;
 }
 
 /** A single polymorphic row in the unified inbox — a thin, read-only projection over the
@@ -605,6 +607,48 @@ export interface ApprovalItem {
   bulkEligible: boolean;
   history: ApprovalStep[];
   notes: ApprovalNote[];
+}
+
+// ─── Issue #14: Dynamic Conditional Workflow Routing Engine ──────────────────
+
+export type WorkflowConditionField = 'amount' | 'company' | 'department';
+export type WorkflowConditionOperator = '>' | '<' | '==' | 'in';
+
+export interface WorkflowCondition {
+  field: WorkflowConditionField;
+  operator: WorkflowConditionOperator;
+  value: number | string | string[];
+}
+
+export interface WorkflowApproverStage {
+  role: string;
+  /** Stages sharing a level run in parallel; the engine advances to the next level once every
+   *  stage at the current level has collected its `requiredSignatures`. */
+  level: number;
+  requiredSignatures: number;
+}
+
+export interface WorkflowRule {
+  id: string;
+  name: string;
+  description: string;
+  /** ALL conditions must match (AND) for this rule to apply. */
+  conditions: WorkflowCondition[];
+  approvers: WorkflowApproverStage[];
+  /** Lower evaluates first; the first rule whose conditions all match wins. */
+  priority: number;
+  enabled: boolean;
+}
+
+export interface WorkflowStageGroup {
+  level: number;
+  parallel: boolean;
+  approvers: WorkflowApproverStage[];
+}
+
+export interface WorkflowEvaluationResult {
+  matchedRule: WorkflowRule | null;
+  stages: WorkflowStageGroup[];
 }
 
 // ─── Issue #01: Multi-Level Organizational Hierarchy ──────────────────────────
