@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PlusIcon, XIcon, ShieldAlertIcon } from 'lucide-react';
+import { PlusIcon, XIcon, ShieldAlertIcon, ArrowRightLeftIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable, type Column } from '../components/DataTable';
 import { Tabs } from '../components/ui/Tabs';
@@ -35,7 +35,13 @@ export function Invoices() {
 
   const scoped = filterInvoices(invoices);
   const rows =
-  tab === 'all' ? scoped : tab === 'payable' ? scoped.filter((i) => i.type === 'Payable') : scoped.filter((i) => i.type === 'Receivable');
+    tab === 'all'
+      ? scoped
+      : tab === 'payable'
+      ? scoped.filter((i) => i.type === 'Payable')
+      : tab === 'receivable'
+      ? scoped.filter((i) => i.type === 'Receivable')
+      : scoped.filter((i) => i.isInterCompany);
 
   const detailInvoice = detailInvoiceId ? invoices.find((i) => i.id === detailInvoiceId) || null : null;
   const detailMatch = detailInvoice ? computeThreeWayMatch(detailInvoice) : null;
@@ -70,10 +76,27 @@ export function Invoices() {
   };
 
   const columns: Array<Column<Invoice>> = [
-  { key: 'id', header: 'Invoice', mono: true, sortable: true, hideable: false, value: (i) => i.id, render: (i) => i.id },
-  { key: 'party', header: 'Counterparty', sortable: true, value: (i) => i.party, render: (i) => i.party },
-  { key: 'company', header: 'Company', value: (i) => i.company, render: (i) => <span className="text-muted">{i.company}</span> },
-  { key: 'type', header: 'Type', value: (i) => i.type, render: (i) => <Badge tone={i.type === 'Payable' ? 'warning' : 'info'}>{i.type}</Badge> },
+    {
+      key: 'id',
+      header: 'Invoice',
+      mono: true,
+      sortable: true,
+      hideable: false,
+      value: (i) => i.id,
+      render: (i) => (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-mono">{i.id}</span>
+          {i.isInterCompany && (
+            <Badge tone="accent" className="text-2xs inline-flex items-center gap-0.5">
+              <ArrowRightLeftIcon className="h-2.5 w-2.5" /> Inter-Co
+            </Badge>
+          )}
+        </div>
+      )
+    },
+    { key: 'party', header: 'Counterparty', sortable: true, value: (i) => i.party, render: (i) => i.party },
+    { key: 'company', header: 'Company', value: (i) => i.company, render: (i) => <span className="text-muted">{i.company}</span> },
+    { key: 'type', header: 'Type', value: (i) => i.type, render: (i) => <Badge tone={i.type === 'Payable' ? 'warning' : 'info'}>{i.type}</Badge> },
   { key: 'issued', header: 'Issued', value: (i) => i.issued, render: (i) => <span className="text-muted">{i.issued}</span> },
   { key: 'due', header: 'Due', sortable: true, value: (i) => i.due, render: (i) => <span className="text-muted">{i.due}</span> },
   { key: 'amount', header: 'Amount', align: 'right', mono: true, sortable: true, value: (i) => i.amount, render: (i) => formatCurrency(i.amount) },
@@ -167,13 +190,14 @@ export function Invoices() {
       <div className="px-6">
         <Tabs
           tabs={[
-          { id: 'all', label: 'All', count: scoped.length },
-          { id: 'payable', label: 'Accounts Payable', count: scoped.filter((i) => i.type === 'Payable').length },
-          { id: 'receivable', label: 'Accounts Receivable', count: scoped.filter((i) => i.type === 'Receivable').length }]
-          }
+            { id: 'all', label: 'All', count: scoped.length },
+            { id: 'payable', label: 'Accounts Payable', count: scoped.filter((i) => i.type === 'Payable').length },
+            { id: 'receivable', label: 'Accounts Receivable', count: scoped.filter((i) => i.type === 'Receivable').length },
+            { id: 'intercompany', label: 'Inter-Company', count: scoped.filter((i) => i.isInterCompany).length }
+          ]}
           active={tab}
-          onChange={setTab} />
-
+          onChange={setTab}
+        />
       </div>
 
       <div className="p-6">
@@ -264,6 +288,38 @@ export function Invoices() {
                 <div className="mt-0.5"><StatusBadge status={detailInvoice.status} /></div>
               </div>
             </div>
+
+            {detailInvoice.isInterCompany && (
+              <div className="mt-4 rounded-xl border border-accent/40 bg-accent-soft/20 p-4">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <ArrowRightLeftIcon className="h-4 w-4 text-accent shrink-0" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-accent">
+                    Inter-Company Auto-Mirroring Synchronization
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="rounded-lg border border-line bg-surface/80 p-2.5">
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-faint">Sister Entity Trade</p>
+                    <p className="mt-0.5 font-medium text-ink truncate">
+                      {detailInvoice.company} ↔ {detailInvoice.party}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-line bg-surface/80 p-2.5">
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-faint">Mirrored Counterpart Invoice</p>
+                    <p className="mt-0.5 font-mono font-medium text-accent">
+                      {detailInvoice.mirroredInvoiceId || 'Synchronized Cross-Entity Draft'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-line bg-surface/80 p-2.5">
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-faint">Cross-Entity Line Parity</p>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-success font-semibold">
+                      <span className="h-2 w-2 rounded-full bg-success" />
+                      <span>100% Synchronized</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {detailInvoice.type === 'Payable' && detailInvoice.poId ? (
               <div className="mt-4">

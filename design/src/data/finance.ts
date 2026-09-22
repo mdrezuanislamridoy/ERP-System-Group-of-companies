@@ -12,9 +12,14 @@ import type {
   ReconcilableLedgerLine,
   BankReconciliationSummary,
   ThreeWayMatchLine,
-  ThreeWayMatchResult
+  ThreeWayMatchResult,
+  EliminationEntry,
+  ConsolidationReportLine,
+  ConsolidationSummary
 } from '../types';
 import { getPurchaseOrders, getGoodsReceiptNotes } from './operations';
+import { recordAuditEvent } from './system';
+import { legalEntities } from './organization';
 
 export const groupKpis = [
   { label: 'Revenue (YTD)', value: '৳245.0 Cr', delta: '+8.4%', tone: 'success' as const, sub: 'vs ৳226.1 Cr LY' },
@@ -67,6 +72,114 @@ const initialInvoices: Invoice[] = [
   { id: 'INV-2026-001830', party: 'Shwapno Superstore', company: 'ABC Grocery Ltd.', type: 'Receivable', issued: '11 Aug 2026', due: '10 Sep 2026', amount: 8860000, balance: 8860000, status: 'pending' },
   { id: 'INV-2026-001812', party: 'Navana Motors', company: 'ABC Transport Ltd.', type: 'Payable', issued: '06 Aug 2026', due: '05 Sep 2026', amount: 15600000, balance: 0, status: 'completed' },
   { id: 'INV-2026-001788', party: 'Beximco Pharma', company: 'ABC Pharma Ltd.', type: 'Receivable', issued: '01 Aug 2026', due: '31 Aug 2026', amount: 2240000, balance: 2240000, status: 'cancelled' },
+
+  // ─── Phase 6 (Issue #19): Seeded Mirrored Inter-Company Invoices ────────────
+  {
+    id: 'INV-IC-2026-000101',
+    party: 'ABC Foods Ltd.',
+    company: 'ABC Transport Ltd.',
+    type: 'Receivable',
+    issued: '15 Sep 2026',
+    due: '15 Oct 2026',
+    amount: 4500000,
+    balance: 4500000,
+    status: 'pending',
+    isInterCompany: true,
+    interCompanyPartnerName: 'ABC Foods Ltd.',
+    mirroredInvoiceId: 'INV-IC-2026-000102-AP',
+    sourceSalesOrderId: 'so-ic-2026-0001',
+    lines: [
+      { id: 'invl-ic-1', sku: 'LOG-TRUCK-50T', description: 'Heavy Freight Logistics — Chattogram to Savar Corridor', qty: 15, unit: 'Trip', unitPrice: 300000, lineTotal: 4500000 }
+    ]
+  },
+  {
+    id: 'INV-IC-2026-000102-AP',
+    party: 'ABC Transport Ltd.',
+    company: 'ABC Foods Ltd.',
+    type: 'Payable',
+    issued: '15 Sep 2026',
+    due: '15 Oct 2026',
+    amount: 4500000,
+    balance: 4500000,
+    status: 'pending',
+    poId: 'po-2026-0005',
+    matchStatus: 'Matched',
+    isInterCompany: true,
+    interCompanyPartnerName: 'ABC Transport Ltd.',
+    mirroredInvoiceId: 'INV-IC-2026-000101',
+    sourceSalesOrderId: 'so-ic-2026-0001',
+    lines: [
+      { id: 'invl-ic-2', poLineId: 'pol-0005-1', sku: 'LOG-TRUCK-50T', description: 'Heavy Freight Logistics — Chattogram to Savar Corridor', qty: 15, unit: 'Trip', unitPrice: 300000, lineTotal: 4500000 }
+    ]
+  },
+  {
+    id: 'INV-IC-2026-000201',
+    party: 'ABC Grocery Ltd.',
+    company: 'ABC Technologies Ltd.',
+    type: 'Receivable',
+    issued: '10 Sep 2026',
+    due: '10 Oct 2026',
+    amount: 1800000,
+    balance: 1800000,
+    status: 'completed',
+    isInterCompany: true,
+    interCompanyPartnerName: 'ABC Grocery Ltd.',
+    mirroredInvoiceId: 'INV-IC-2026-000202-AP',
+    lines: [
+      { id: 'invl-ic-3', sku: 'SFT-ERP-POS', description: 'Enterprise POS Cloud Hosting & Core ERP Subscription', qty: 1, unit: 'Monthly Lic', unitPrice: 1800000, lineTotal: 1800000 }
+    ]
+  },
+  {
+    id: 'INV-IC-2026-000202-AP',
+    party: 'ABC Technologies Ltd.',
+    company: 'ABC Grocery Ltd.',
+    type: 'Payable',
+    issued: '10 Sep 2026',
+    due: '10 Oct 2026',
+    amount: 1800000,
+    balance: 1800000,
+    status: 'completed',
+    isInterCompany: true,
+    interCompanyPartnerName: 'ABC Technologies Ltd.',
+    mirroredInvoiceId: 'INV-IC-2026-000201',
+    lines: [
+      { id: 'invl-ic-4', sku: 'SFT-ERP-POS', description: 'Enterprise POS Cloud Hosting & Core ERP Subscription', qty: 1, unit: 'Monthly Lic', unitPrice: 1800000, lineTotal: 1800000 }
+    ]
+  },
+  {
+    id: 'INV-IC-2026-000301',
+    party: 'ABC Textiles Ltd.',
+    company: 'ABC Foods Ltd.',
+    type: 'Receivable',
+    issued: '08 Sep 2026',
+    due: '08 Oct 2026',
+    amount: 800000,
+    balance: 800000,
+    status: 'completed',
+    isInterCompany: true,
+    interCompanyPartnerName: 'ABC Textiles Ltd.',
+    mirroredInvoiceId: 'INV-IC-2026-000302-AP',
+    lines: [
+      { id: 'invl-ic-5', sku: 'FMCG-CANTEEN', description: 'Factory Canteen Consumables & Packaged Foods Supply', qty: 400, unit: 'Kit', unitPrice: 2000, lineTotal: 800000 }
+    ]
+  },
+  {
+    id: 'INV-IC-2026-000302-AP',
+    party: 'ABC Foods Ltd.',
+    company: 'ABC Textiles Ltd.',
+    type: 'Payable',
+    issued: '08 Sep 2026',
+    due: '08 Oct 2026',
+    amount: 800000,
+    balance: 800000,
+    status: 'completed',
+    isInterCompany: true,
+    interCompanyPartnerName: 'ABC Foods Ltd.',
+    mirroredInvoiceId: 'INV-IC-2026-000301',
+    lines: [
+      { id: 'invl-ic-6', sku: 'FMCG-CANTEEN', description: 'Factory Canteen Consumables & Packaged Foods Supply', qty: 400, unit: 'Kit', unitPrice: 2000, lineTotal: 800000 }
+    ]
+  },
 
   // ─── Issue #12: Procurement-sourced Payables wired for 3-Way Matching ──────
   {
@@ -131,24 +244,26 @@ export let invoices: Invoice[] = initialInvoices.map((i) => ({ ...i, lines: i.li
 
 export const initialChartOfAccounts: ChartAccount[] = [
   // 1000 ASSETS
-  { code: '1000', name: 'Assets', level: 0, type: 'Asset', openingBalance: 1284000000, normalBalance: 'debit' },
-  { code: '1100', name: 'Current Assets', level: 1, type: 'Asset', openingBalance: 642000000, parentCode: '1000', normalBalance: 'debit' },
+  { code: '1000', name: 'Assets', level: 0, type: 'Asset', openingBalance: 1355000000, normalBalance: 'debit' },
+  { code: '1100', name: 'Current Assets', level: 1, type: 'Asset', openingBalance: 713000000, parentCode: '1000', normalBalance: 'debit' },
   { code: '1110', name: 'Cash & Cash Equivalents', level: 2, type: 'Asset', openingBalance: 412000000, parentCode: '1100', normalBalance: 'debit' },
   { code: '1120', name: 'Accounts Receivable (Trade)', level: 2, type: 'Asset', openingBalance: 286000000, parentCode: '1100', normalBalance: 'debit' },
   { code: '1130', name: 'Inventory — Raw Materials', level: 2, type: 'Asset', openingBalance: 145000000, parentCode: '1100', normalBalance: 'debit' },
   { code: '1140', name: 'Inventory — Finished Goods', level: 2, type: 'Asset', openingBalance: 180000000, parentCode: '1100', normalBalance: 'debit' },
   { code: '1150', name: 'Advance Corporate Tax & Prepayments', level: 2, type: 'Asset', openingBalance: 32000000, parentCode: '1100', normalBalance: 'debit' },
+  { code: '1160', name: 'Inter-Company Receivables', level: 2, type: 'Asset', openingBalance: 71000000, parentCode: '1100', normalBalance: 'debit' },
   { code: '1500', name: 'Non-Current Assets', level: 1, type: 'Asset', openingBalance: 642000000, parentCode: '1000', normalBalance: 'debit' },
   { code: '1510', name: 'Property, Plant & Equipment', level: 2, type: 'Asset', openingBalance: 780000000, parentCode: '1500', normalBalance: 'debit' },
   { code: '1520', name: 'Accumulated Depreciation', level: 2, type: 'Asset', openingBalance: 138000000, parentCode: '1500', normalBalance: 'credit' },
 
   // 2000 LIABILITIES
-  { code: '2000', name: 'Liabilities', level: 0, type: 'Liability', openingBalance: 508000000, normalBalance: 'credit' },
-  { code: '2100', name: 'Current Liabilities', level: 1, type: 'Liability', openingBalance: 318000000, parentCode: '2000', normalBalance: 'credit' },
+  { code: '2000', name: 'Liabilities', level: 0, type: 'Liability', openingBalance: 579000000, normalBalance: 'credit' },
+  { code: '2100', name: 'Current Liabilities', level: 1, type: 'Liability', openingBalance: 389000000, parentCode: '2000', normalBalance: 'credit' },
   { code: '2110', name: 'Accounts Payable (Trade)', level: 2, type: 'Liability', openingBalance: 194000000, parentCode: '2100', normalBalance: 'credit' },
   { code: '2120', name: 'Accrued Payroll & Benefits', level: 2, type: 'Liability', openingBalance: 48000000, parentCode: '2100', normalBalance: 'credit' },
   { code: '2130', name: 'VAT & Tax Withholding Payable', level: 2, type: 'Liability', openingBalance: 26000000, parentCode: '2100', normalBalance: 'credit' },
   { code: '2140', name: 'Short-Term Credit Facilities', level: 2, type: 'Liability', openingBalance: 50000000, parentCode: '2100', normalBalance: 'credit' },
+  { code: '2150', name: 'Inter-Company Payables', level: 2, type: 'Liability', openingBalance: 71000000, parentCode: '2100', normalBalance: 'credit' },
   { code: '2500', name: 'Long-Term Liabilities', level: 1, type: 'Liability', openingBalance: 190000000, parentCode: '2000', normalBalance: 'credit' },
   { code: '2510', name: 'Term Loan Facilities', level: 2, type: 'Liability', openingBalance: 190000000, parentCode: '2500', normalBalance: 'credit' },
 
@@ -160,20 +275,22 @@ export const initialChartOfAccounts: ChartAccount[] = [
   { code: '3210', name: 'Retained Earnings', level: 2, type: 'Equity', openingBalance: 59000000, parentCode: '3200', normalBalance: 'credit' },
 
   // 4000 REVENUE
-  { code: '4000', name: 'Revenue', level: 0, type: 'Revenue', openingBalance: 2450000000, normalBalance: 'credit' },
-  { code: '4100', name: 'Operating Revenue', level: 1, type: 'Revenue', openingBalance: 2450000000, parentCode: '4000', normalBalance: 'credit' },
+  { code: '4000', name: 'Revenue', level: 0, type: 'Revenue', openingBalance: 2521000000, normalBalance: 'credit' },
+  { code: '4100', name: 'Operating Revenue', level: 1, type: 'Revenue', openingBalance: 2521000000, parentCode: '4000', normalBalance: 'credit' },
   { code: '4110', name: 'Sales Revenue — FMCG & Foods', level: 2, type: 'Revenue', openingBalance: 1480000000, parentCode: '4100', normalBalance: 'credit' },
   { code: '4120', name: 'Freight & Logistics Revenue', level: 2, type: 'Revenue', openingBalance: 580000000, parentCode: '4100', normalBalance: 'credit' },
   { code: '4130', name: 'IT & Software License Revenue', level: 2, type: 'Revenue', openingBalance: 390000000, parentCode: '4100', normalBalance: 'credit' },
   { code: '4140', name: 'Interest Income', level: 2, type: 'Revenue', openingBalance: 0, parentCode: '4100', normalBalance: 'credit' },
+  { code: '4150', name: 'Inter-Company Trading Revenue', level: 2, type: 'Revenue', openingBalance: 71000000, parentCode: '4100', normalBalance: 'credit' },
 
   // 5000 COST OF GOODS SOLD
-  { code: '5000', name: 'Cost of Goods Sold', level: 0, type: 'Expense', openingBalance: 1420000000, normalBalance: 'debit' },
-  { code: '5100', name: 'Direct Production Costs', level: 1, type: 'Expense', openingBalance: 1420000000, parentCode: '5000', normalBalance: 'debit' },
+  { code: '5000', name: 'Cost of Goods Sold', level: 0, type: 'Expense', openingBalance: 1491000000, normalBalance: 'debit' },
+  { code: '5100', name: 'Direct Production Costs', level: 1, type: 'Expense', openingBalance: 1491000000, parentCode: '5000', normalBalance: 'debit' },
   { code: '5110', name: 'Raw Material Consumption', level: 2, type: 'Expense', openingBalance: 980000000, parentCode: '5100', normalBalance: 'debit' },
   { code: '5120', name: 'Direct Factory Labor', level: 2, type: 'Expense', openingBalance: 260000000, parentCode: '5100', normalBalance: 'debit' },
   { code: '5130', name: 'Factory Overheads & Energy', level: 2, type: 'Expense', openingBalance: 180000000, parentCode: '5100', normalBalance: 'debit' },
   { code: '5140', name: 'Inventory Write-Off & Scrap Expense', level: 2, type: 'Expense', openingBalance: 0, parentCode: '5100', normalBalance: 'debit' },
+  { code: '5150', name: 'Inter-Company Cost of Services & Goods', level: 2, type: 'Expense', openingBalance: 71000000, parentCode: '5100', normalBalance: 'debit' },
 
   // 6000 OPERATING EXPENSES
   { code: '6000', name: 'Operating Expenses', level: 0, type: 'Expense', openingBalance: 400000000, normalBalance: 'debit' },
@@ -1466,4 +1583,652 @@ export function rejectInvoice(invoiceId: string): Invoice {
   invoices = invoices.map((i) => (i.id === invoiceId ? updated : i));
   notifyInvoiceOverrides();
   return updated;
+}
+
+// ─── Phase 6 (Issue #19): Inter-Company Automated Invoice Mirroring ───────────
+
+let nextInterCompanyInvoiceSeq = 105;
+
+/**
+ * Automatically creates a matched pair of cross-entity invoices:
+ * 1. A Sales Invoice (Receivable) in the selling sister company.
+ * 2. A matched draft Supplier Invoice (Payable) in the buying sister company.
+ * Line items, quantities, unit prices, and document references stay synchronized 1:1.
+ */
+export function createMirroredInterCompanyInvoices(data: {
+  salesOrderId?: string;
+  sourcePoId?: string;
+  sellerCompanyName: string;
+  buyerCompanyName: string;
+  amount: number;
+  lines: Array<{
+    sku: string;
+    description: string;
+    qty: number;
+    unit: string;
+    unitPrice: number;
+    lineTotal: number;
+    sourcePoLineId?: string;
+  }>;
+  by: string;
+}): { salesInvoice: Invoice; supplierInvoice: Invoice } {
+  const seq = nextInterCompanyInvoiceSeq++;
+  const today = new Date().toISOString().slice(0, 10);
+  const due = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+  const salesInvId = `INV-IC-2026-000${seq}`;
+  const supplierInvId = `INV-IC-2026-000${seq + 1}-AP`;
+  nextInterCompanyInvoiceSeq++;
+
+  const salesInvoice: Invoice = {
+    id: salesInvId,
+    party: data.buyerCompanyName,
+    company: data.sellerCompanyName,
+    type: 'Receivable',
+    issued: today,
+    due,
+    amount: data.amount,
+    balance: data.amount,
+    status: 'pending',
+    isInterCompany: true,
+    sourceSalesOrderId: data.salesOrderId,
+    mirroredInvoiceId: supplierInvId,
+    interCompanyPartnerName: data.buyerCompanyName,
+    lines: data.lines.map((l, idx) => ({
+      id: `invl-ic-${seq}-${idx + 1}`,
+      sku: l.sku,
+      description: l.description,
+      qty: l.qty,
+      unit: l.unit,
+      unitPrice: l.unitPrice,
+      lineTotal: l.lineTotal
+    }))
+  };
+
+  const supplierInvoice: Invoice = {
+    id: supplierInvId,
+    party: data.sellerCompanyName,
+    company: data.buyerCompanyName,
+    type: 'Payable',
+    issued: today,
+    due,
+    amount: data.amount,
+    balance: data.amount,
+    status: 'pending',
+    poId: data.sourcePoId,
+    matchStatus: 'Matched',
+    isInterCompany: true,
+    sourceSalesOrderId: data.salesOrderId,
+    mirroredInvoiceId: salesInvId,
+    interCompanyPartnerName: data.sellerCompanyName,
+    lines: data.lines.map((l, idx) => ({
+      id: `invl-ic-${seq + 1}-${idx + 1}`,
+      poLineId: l.sourcePoLineId,
+      sku: l.sku,
+      description: l.description,
+      qty: l.qty,
+      unit: l.unit,
+      unitPrice: l.unitPrice,
+      lineTotal: l.lineTotal
+    }))
+  };
+
+  invoices = [salesInvoice, supplierInvoice, ...invoices];
+  notifyInvoiceOverrides();
+
+  recordAuditEvent({
+    user: data.by,
+    action: 'AUTO_MIRROR_INTERCOMPANY_INVOICE',
+    resource: `${salesInvId} (AR) ↔ ${supplierInvId} (AP)`,
+    company: `${data.sellerCompanyName} ↔ ${data.buyerCompanyName}`,
+    before: '—',
+    after: `Auto-generated cross-entity mirrored invoices — ${formatCurrency(data.amount)}`
+  });
+
+  return { salesInvoice, supplierInvoice };
+}
+
+// ─── Phase 6 (Issue #20): Financial Consolidation & Elimination Journal Entries ─
+
+/**
+ * Identifies all internal inter-company trading transactions between sister concerns
+ * and dynamically compiles double-entry virtual Elimination Journal Entries:
+ * Rule IC-01: Dr. Inter-Company Revenue (4150) / Cr. Inter-Company COGS & Expenses (5150)
+ * Rule IC-02: Dr. Inter-Company Payables (2150) / Cr. Inter-Company Receivables (1160)
+ */
+export function getInterCompanyEliminations(): EliminationEntry[] {
+  // Pre-configured baseline eliminations across sister company trading relationships
+  const baselineEliminations: EliminationEntry[] = [
+    {
+      id: 'ELIM-2026-001',
+      ruleId: 'RULE-IC-01',
+      ruleName: 'Inter-Company Revenue & Logistics COGS Elimination',
+      sourceEntityId: 'le-transport',
+      sourceEntityName: 'ABC Transport Ltd.',
+      targetEntityId: 'le-foods',
+      targetEntityName: 'ABC Foods Ltd.',
+      description: 'Eliminate ABC Transport logistics haulage billing to ABC Foods (Chattogram-Savar freight)',
+      referenceDoc: 'PO-2026-0005 / SO-IC-2026-0001',
+      debitAccountCode: '4150',
+      debitAccountName: 'Inter-Company Trading Revenue',
+      creditAccountCode: '5150',
+      creditAccountName: 'Inter-Company Cost of Services & Goods',
+      amount: 45000000, // ৳4.5 Cr
+      status: 'applied'
+    },
+    {
+      id: 'ELIM-2026-002',
+      ruleId: 'RULE-IC-02',
+      ruleName: 'Inter-Company Transport AP/AR Settlement Offset',
+      sourceEntityId: 'le-foods',
+      sourceEntityName: 'ABC Foods Ltd.',
+      targetEntityId: 'le-transport',
+      targetEntityName: 'ABC Transport Ltd.',
+      description: 'Offset outstanding open freight receivables against Foods procurement payables',
+      referenceDoc: 'INV-IC-2026-000101 ↔ INV-IC-2026-000102-AP',
+      debitAccountCode: '2150',
+      debitAccountName: 'Inter-Company Payables',
+      creditAccountCode: '1160',
+      creditAccountName: 'Inter-Company Receivables',
+      amount: 45000000,
+      status: 'applied'
+    },
+    {
+      id: 'ELIM-2026-003',
+      ruleId: 'RULE-IC-01',
+      ruleName: 'Inter-Company IT & ERP Platform Elimination',
+      sourceEntityId: 'le-tech',
+      sourceEntityName: 'ABC Technologies Ltd.',
+      targetEntityId: 'le-grocery',
+      targetEntityName: 'ABC Grocery Ltd.',
+      description: 'Eliminate internal ERP hosting and retail POS subscription services billed to ABC Grocery',
+      referenceDoc: 'INV-IC-2026-000201 ↔ INV-IC-2026-000202-AP',
+      debitAccountCode: '4150',
+      debitAccountName: 'Inter-Company Trading Revenue',
+      creditAccountCode: '5150',
+      creditAccountName: 'Inter-Company Cost of Services & Goods',
+      amount: 18000000, // ৳1.8 Cr
+      status: 'applied'
+    },
+    {
+      id: 'ELIM-2026-004',
+      ruleId: 'RULE-IC-02',
+      ruleName: 'Inter-Company IT Licensing AP/AR Offset',
+      sourceEntityId: 'le-grocery',
+      sourceEntityName: 'ABC Grocery Ltd.',
+      targetEntityId: 'le-tech',
+      targetEntityName: 'ABC Technologies Ltd.',
+      description: 'Nullify outstanding inter-company IT subscription payable/receivable balances',
+      referenceDoc: 'INV-IC-2026-000201 ↔ INV-IC-2026-000202-AP',
+      debitAccountCode: '2150',
+      debitAccountName: 'Inter-Company Payables',
+      creditAccountCode: '1160',
+      creditAccountName: 'Inter-Company Receivables',
+      amount: 18000000,
+      status: 'applied'
+    },
+    {
+      id: 'ELIM-2026-005',
+      ruleId: 'RULE-IC-01',
+      ruleName: 'Inter-Company Institutional Canteen & Goods Elimination',
+      sourceEntityId: 'le-foods',
+      sourceEntityName: 'ABC Foods Ltd.',
+      targetEntityId: 'le-textile',
+      targetEntityName: 'ABC Textiles Ltd.',
+      description: 'Eliminate internal packaged food and cafeteria supplies billed to Gazipur spinning mill',
+      referenceDoc: 'INV-IC-2026-000301 ↔ INV-IC-2026-000302-AP',
+      debitAccountCode: '4150',
+      debitAccountName: 'Inter-Company Trading Revenue',
+      creditAccountCode: '5150',
+      creditAccountName: 'Inter-Company Cost of Services & Goods',
+      amount: 8000000, // ৳0.8 Cr
+      status: 'applied'
+    },
+    {
+      id: 'ELIM-2026-006',
+      ruleId: 'RULE-IC-02',
+      ruleName: 'Inter-Company Canteen Supplies AP/AR Offset',
+      sourceEntityId: 'le-textile',
+      sourceEntityName: 'ABC Textiles Ltd.',
+      targetEntityId: 'le-foods',
+      targetEntityName: 'ABC Foods Ltd.',
+      description: 'Offset internal textile staff welfare payable against Foods trading receivables',
+      referenceDoc: 'INV-IC-2026-000301 ↔ INV-IC-2026-000302-AP',
+      debitAccountCode: '2150',
+      debitAccountName: 'Inter-Company Payables',
+      creditAccountCode: '1160',
+      creditAccountName: 'Inter-Company Receivables',
+      amount: 8000000,
+      status: 'applied'
+    }
+  ];
+
+  // Dynamically include any runtime inter-company invoices beyond the baseline
+  const dynamicInvoices = invoices.filter((i) => i.isInterCompany && i.type === 'Receivable' && !['INV-IC-2026-000101', 'INV-IC-2026-000201', 'INV-IC-2026-000301'].includes(i.id));
+
+  const dynamicEliminations: EliminationEntry[] = [];
+  dynamicInvoices.forEach((inv, idx) => {
+    dynamicEliminations.push(
+      {
+        id: `ELIM-DYN-REV-${idx + 1}`,
+        ruleId: 'RULE-IC-01',
+        ruleName: 'Dynamic Inter-Company Revenue & Cost Elimination',
+        sourceEntityId: inv.company,
+        sourceEntityName: inv.company,
+        targetEntityId: inv.party,
+        targetEntityName: inv.party,
+        description: `Eliminate internal invoice ${inv.id} billed to ${inv.party}`,
+        referenceDoc: inv.id,
+        debitAccountCode: '4150',
+        debitAccountName: 'Inter-Company Trading Revenue',
+        creditAccountCode: '5150',
+        creditAccountName: 'Inter-Company Cost of Services & Goods',
+        amount: inv.amount,
+        status: 'applied'
+      },
+      {
+        id: `ELIM-DYN-BS-${idx + 1}`,
+        ruleId: 'RULE-IC-02',
+        ruleName: 'Dynamic Inter-Company AP/AR Balance Offset',
+        sourceEntityId: inv.party,
+        sourceEntityName: inv.party,
+        targetEntityId: inv.company,
+        targetEntityName: inv.company,
+        description: `Offset AR balance of ${inv.id} against matching AP in ${inv.party}`,
+        referenceDoc: inv.id,
+        debitAccountCode: '2150',
+        debitAccountName: 'Inter-Company Payables',
+        creditAccountCode: '1160',
+        creditAccountName: 'Inter-Company Receivables',
+        amount: inv.amount,
+        status: 'applied'
+      }
+    );
+  });
+
+  return [...baselineEliminations, ...dynamicEliminations];
+}
+
+/**
+ * Aggregates all legal entities into base group currency (BDT) and produces
+ * the Consolidated Profit & Loss and Consolidated Balance Sheet reports
+ * with four distinct columns:
+ * 1. Individual Legal Entities
+ * 2. Total Combined Sum
+ * 3. Elimination Journal Entries (Dr/Cr)
+ * 4. Consolidated Net Result
+ */
+export function getConsolidatedFinancials(): {
+  summary: ConsolidationSummary;
+  plLines: ConsolidationReportLine[];
+  bsLines: ConsolidationReportLine[];
+} {
+  const eliminations = getInterCompanyEliminations();
+
+  // Revenue eliminations (RULE-IC-01)
+  const eliminatedRevenue = eliminations
+    .filter((e) => e.ruleId === 'RULE-IC-01')
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  // Balance sheet eliminations (RULE-IC-02)
+  const eliminatedReceivables = eliminations
+    .filter((e) => e.ruleId === 'RULE-IC-02')
+    .reduce((sum, e) => sum + e.amount, 0);
+  const eliminatedPayables = eliminatedReceivables;
+
+  // Aggregate entity revenues and expenses
+  const entities = legalEntities;
+  const entityRevMap: Record<string, number> = {};
+  const entityExpMap: Record<string, number> = {};
+  const entityIcRevMap: Record<string, number> = {};
+  const entityIcExpMap: Record<string, number> = {};
+
+  entities.forEach((ent) => {
+    entityRevMap[ent.id] = ent.revenue * 100000; // standard scale to BDT
+    entityExpMap[ent.id] = ent.expense * 100000;
+    entityIcRevMap[ent.id] = 0;
+    entityIcExpMap[ent.id] = 0;
+  });
+
+  // Assign internal trading amounts to respective entities
+  eliminations
+    .filter((e) => e.ruleId === 'RULE-IC-01')
+    .forEach((e) => {
+      if (entityIcRevMap[e.sourceEntityId] !== undefined) {
+        entityIcRevMap[e.sourceEntityId] += e.amount;
+      }
+      if (entityIcExpMap[e.targetEntityId] !== undefined) {
+        entityIcExpMap[e.targetEntityId] += e.amount;
+      }
+    });
+
+  const combinedRevenue = Object.values(entityRevMap).reduce((s, v) => s + v, 0);
+  const combinedExpense = Object.values(entityExpMap).reduce((s, v) => s + v, 0);
+  const consolidatedRevenue = combinedRevenue - eliminatedRevenue;
+  const consolidatedExpense = combinedExpense - eliminatedRevenue;
+  const consolidatedNetProfit = consolidatedRevenue - consolidatedExpense;
+
+  const summary: ConsolidationSummary = {
+    currency: 'BDT (৳)',
+    asOfDate: '30 Sep 2026 (Q3 FY2026)',
+    totalEntities: entities.length,
+    combinedRevenue,
+    eliminatedRevenue,
+    consolidatedRevenue,
+    combinedExpense,
+    eliminatedExpense: eliminatedRevenue,
+    consolidatedExpense,
+    consolidatedNetProfit,
+    eliminatedReceivables,
+    eliminatedPayables,
+    eliminationEntries: eliminations
+  };
+
+  // ─── Consolidated Profit & Loss Statement Lines ───
+  const externalRevPerEntity: Record<string, number> = {};
+  const icRevPerEntity: Record<string, number> = {};
+  const externalCogsPerEntity: Record<string, number> = {};
+  const icCogsPerEntity: Record<string, number> = {};
+  const grossProfitPerEntity: Record<string, number> = {};
+  const opexPerEntity: Record<string, number> = {};
+  const netProfitPerEntity: Record<string, number> = {};
+
+  entities.forEach((ent) => {
+    const icRev = entityIcRevMap[ent.id] || 0;
+    const icExp = entityIcExpMap[ent.id] || 0;
+    const totalRev = entityRevMap[ent.id] || 0;
+    const totalExp = entityExpMap[ent.id] || 0;
+
+    externalRevPerEntity[ent.id] = Math.max(0, totalRev - icRev);
+    icRevPerEntity[ent.id] = icRev;
+    externalCogsPerEntity[ent.id] = Math.max(0, totalExp * 0.7 - icExp);
+    icCogsPerEntity[ent.id] = icExp;
+    grossProfitPerEntity[ent.id] = totalRev - (externalCogsPerEntity[ent.id] + icExp);
+    opexPerEntity[ent.id] = totalExp * 0.3;
+    netProfitPerEntity[ent.id] = totalRev - totalExp;
+  });
+
+  const plLines: ConsolidationReportLine[] = [
+    {
+      category: 'REVENUE',
+      accountName: 'REVENUE & TURNOVER',
+      isHeader: true,
+      entities: {},
+      combinedTotal: 0,
+      eliminationAdjustments: 0,
+      consolidatedNet: 0
+    },
+    {
+      category: 'REVENUE',
+      accountCode: '4110-4130',
+      accountName: 'External Commercial Sales Revenue',
+      entities: externalRevPerEntity,
+      combinedTotal: Object.values(externalRevPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(externalRevPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'REVENUE',
+      accountCode: '4150',
+      accountName: 'Inter-Company Trading & Service Revenue',
+      entities: icRevPerEntity,
+      combinedTotal: eliminatedRevenue,
+      eliminationAdjustments: -eliminatedRevenue,
+      consolidatedNet: 0
+    },
+    {
+      category: 'REVENUE',
+      accountName: 'Total Gross Revenue',
+      isSubtotal: true,
+      entities: entityRevMap,
+      combinedTotal: combinedRevenue,
+      eliminationAdjustments: -eliminatedRevenue,
+      consolidatedNet: consolidatedRevenue
+    },
+    {
+      category: 'COGS',
+      accountName: 'COST OF GOODS & DIRECT SERVICES',
+      isHeader: true,
+      entities: {},
+      combinedTotal: 0,
+      eliminationAdjustments: 0,
+      consolidatedNet: 0
+    },
+    {
+      category: 'COGS',
+      accountCode: '5110-5130',
+      accountName: 'External Raw Materials & Direct Production Costs',
+      entities: externalCogsPerEntity,
+      combinedTotal: Object.values(externalCogsPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(externalCogsPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'COGS',
+      accountCode: '5150',
+      accountName: 'Inter-Company Logistics, Goods & Service Costs',
+      entities: icCogsPerEntity,
+      combinedTotal: eliminatedRevenue,
+      eliminationAdjustments: -eliminatedRevenue,
+      consolidatedNet: 0
+    },
+    {
+      category: 'COGS',
+      accountName: 'Total Cost of Sales',
+      isSubtotal: true,
+      entities: Object.fromEntries(entities.map((e) => [e.id, externalCogsPerEntity[e.id] + icCogsPerEntity[e.id]])),
+      combinedTotal: Object.values(externalCogsPerEntity).reduce((s, v) => s + v, 0) + eliminatedRevenue,
+      eliminationAdjustments: -eliminatedRevenue,
+      consolidatedNet: Object.values(externalCogsPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'PROFIT',
+      accountName: 'GROSS PROFIT',
+      isSubtotal: true,
+      entities: grossProfitPerEntity,
+      combinedTotal: combinedRevenue - (Object.values(externalCogsPerEntity).reduce((s, v) => s + v, 0) + eliminatedRevenue),
+      eliminationAdjustments: 0,
+      consolidatedNet: consolidatedRevenue - Object.values(externalCogsPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'OPEX',
+      accountName: 'OPERATING EXPENSES',
+      isHeader: true,
+      entities: {},
+      combinedTotal: 0,
+      eliminationAdjustments: 0,
+      consolidatedNet: 0
+    },
+    {
+      category: 'OPEX',
+      accountCode: '6100-6220',
+      accountName: 'Administrative, Staff Salaries & Distribution OPEX',
+      entities: opexPerEntity,
+      combinedTotal: Object.values(opexPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(opexPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'NET_PROFIT',
+      accountName: 'CONSOLIDATED NET PROFIT (EBITDA)',
+      isTotal: true,
+      entities: netProfitPerEntity,
+      combinedTotal: combinedRevenue - combinedExpense,
+      eliminationAdjustments: 0,
+      consolidatedNet: consolidatedNetProfit
+    }
+  ];
+
+  // ─── Consolidated Balance Sheet Statement Lines ───
+  const cashPerEntity: Record<string, number> = {};
+  const tradeArPerEntity: Record<string, number> = {};
+  const icArPerEntity: Record<string, number> = {};
+  const inventoryPerEntity: Record<string, number> = {};
+  const ppePerEntity: Record<string, number> = {};
+  const tradeApPerEntity: Record<string, number> = {};
+  const icApPerEntity: Record<string, number> = {};
+  const loansPerEntity: Record<string, number> = {};
+  const equityPerEntity: Record<string, number> = {};
+
+  entities.forEach((ent) => {
+    const scale = ent.revenue / 2500;
+    cashPerEntity[ent.id] = Math.round(412000000 * scale);
+    tradeArPerEntity[ent.id] = Math.round(286000000 * scale);
+    icArPerEntity[ent.id] = entityIcRevMap[ent.id] ? Math.round(entityIcRevMap[ent.id] * 0.6) : 0;
+    inventoryPerEntity[ent.id] = Math.round(325000000 * scale);
+    ppePerEntity[ent.id] = Math.round(642000000 * scale);
+
+    tradeApPerEntity[ent.id] = Math.round(194000000 * scale);
+    icApPerEntity[ent.id] = entityIcExpMap[ent.id] ? Math.round(entityIcExpMap[ent.id] * 0.6) : 0;
+    loansPerEntity[ent.id] = Math.round(240000000 * scale);
+    equityPerEntity[ent.id] = Math.round(559000000 * scale);
+  });
+
+  const totalIcAr = Object.values(icArPerEntity).reduce((s, v) => s + v, 0);
+  const totalIcAp = Object.values(icApPerEntity).reduce((s, v) => s + v, 0);
+
+  const bsLines: ConsolidationReportLine[] = [
+    {
+      category: 'ASSET',
+      accountName: 'CURRENT ASSETS',
+      isHeader: true,
+      entities: {},
+      combinedTotal: 0,
+      eliminationAdjustments: 0,
+      consolidatedNet: 0
+    },
+    {
+      category: 'ASSET',
+      accountCode: '1110',
+      accountName: 'Cash & Cash Equivalents',
+      entities: cashPerEntity,
+      combinedTotal: Object.values(cashPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(cashPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'ASSET',
+      accountCode: '1120',
+      accountName: 'Trade Accounts Receivable (External)',
+      entities: tradeArPerEntity,
+      combinedTotal: Object.values(tradeArPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(tradeArPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'ASSET',
+      accountCode: '1160',
+      accountName: 'Inter-Company Receivables (Sister Concerns)',
+      entities: icArPerEntity,
+      combinedTotal: totalIcAr,
+      eliminationAdjustments: -totalIcAr,
+      consolidatedNet: 0
+    },
+    {
+      category: 'ASSET',
+      accountCode: '1130-1140',
+      accountName: 'Inventories (Raw Materials & Finished Goods)',
+      entities: inventoryPerEntity,
+      combinedTotal: Object.values(inventoryPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(inventoryPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'ASSET',
+      accountCode: '1510',
+      accountName: 'Property, Plant & Equipment (Net PPE)',
+      entities: ppePerEntity,
+      combinedTotal: Object.values(ppePerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(ppePerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'ASSET',
+      accountName: 'TOTAL ASSETS',
+      isTotal: true,
+      entities: Object.fromEntries(
+        entities.map((e) => [
+          e.id,
+          cashPerEntity[e.id] + tradeArPerEntity[e.id] + icArPerEntity[e.id] + inventoryPerEntity[e.id] + ppePerEntity[e.id]
+        ])
+      ),
+      combinedTotal:
+        Object.values(cashPerEntity).reduce((s, v) => s + v, 0) +
+        Object.values(tradeArPerEntity).reduce((s, v) => s + v, 0) +
+        totalIcAr +
+        Object.values(inventoryPerEntity).reduce((s, v) => s + v, 0) +
+        Object.values(ppePerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: -totalIcAr,
+      consolidatedNet:
+        Object.values(cashPerEntity).reduce((s, v) => s + v, 0) +
+        Object.values(tradeArPerEntity).reduce((s, v) => s + v, 0) +
+        Object.values(inventoryPerEntity).reduce((s, v) => s + v, 0) +
+        Object.values(ppePerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'LIABILITY',
+      accountName: 'LIABILITIES & EQUITY',
+      isHeader: true,
+      entities: {},
+      combinedTotal: 0,
+      eliminationAdjustments: 0,
+      consolidatedNet: 0
+    },
+    {
+      category: 'LIABILITY',
+      accountCode: '2110',
+      accountName: 'Trade Accounts Payable (External)',
+      entities: tradeApPerEntity,
+      combinedTotal: Object.values(tradeApPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(tradeApPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'LIABILITY',
+      accountCode: '2150',
+      accountName: 'Inter-Company Payables (Sister Concerns)',
+      entities: icApPerEntity,
+      combinedTotal: totalIcAp,
+      eliminationAdjustments: -totalIcAp,
+      consolidatedNet: 0
+    },
+    {
+      category: 'LIABILITY',
+      accountCode: '2140-2510',
+      accountName: 'Bank & Term Loan Facilities',
+      entities: loansPerEntity,
+      combinedTotal: Object.values(loansPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(loansPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'LIABILITY',
+      accountCode: '3000',
+      accountName: 'Shareholders Equity & Retained Earnings',
+      entities: equityPerEntity,
+      combinedTotal: Object.values(equityPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: 0,
+      consolidatedNet: Object.values(equityPerEntity).reduce((s, v) => s + v, 0)
+    },
+    {
+      category: 'LIABILITY',
+      accountName: 'TOTAL LIABILITIES & EQUITY',
+      isTotal: true,
+      entities: Object.fromEntries(
+        entities.map((e) => [e.id, tradeApPerEntity[e.id] + icApPerEntity[e.id] + loansPerEntity[e.id] + equityPerEntity[e.id]])
+      ),
+      combinedTotal:
+        Object.values(tradeApPerEntity).reduce((s, v) => s + v, 0) +
+        totalIcAp +
+        Object.values(loansPerEntity).reduce((s, v) => s + v, 0) +
+        Object.values(equityPerEntity).reduce((s, v) => s + v, 0),
+      eliminationAdjustments: -totalIcAp,
+      consolidatedNet:
+        Object.values(tradeApPerEntity).reduce((s, v) => s + v, 0) +
+        Object.values(loansPerEntity).reduce((s, v) => s + v, 0) +
+        Object.values(equityPerEntity).reduce((s, v) => s + v, 0)
+    }
+  ];
+
+  return { summary, plLines, bsLines };
 }

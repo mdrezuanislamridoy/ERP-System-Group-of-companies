@@ -90,6 +90,11 @@ export interface Invoice {
   matchOverrideReason?: string;
   approvedBy?: string;
   approvedAt?: string;
+  /** Phase 6 (Issue #19): Inter-Company Auto-Mirroring fields */
+  isInterCompany?: boolean;
+  mirroredInvoiceId?: string;
+  sourceSalesOrderId?: string;
+  interCompanyPartnerName?: string;
 }
 
 export interface ThreeWayMatchLine {
@@ -339,6 +344,9 @@ export interface Supplier {
   spend: number;
   orders: number;
   rating: number;
+  isSisterConcern?: boolean;
+  sisterCompanyId?: string;
+  interCompanyCode?: string;
 }
 
 // ─── Issue #09: RFQ & Supplier Quotation Comparison Matrix ───────────────────
@@ -452,6 +460,11 @@ export interface PurchaseOrder {
   approvedAt?: string;
   issuedAt?: string;
   closedAt?: string;
+  /** Phase 6 (Issue #19): Inter-Company auto-mirroring linkage */
+  isInterCompany?: boolean;
+  mirroredSalesOrderId?: string;
+  sisterCompanyId?: string;
+  interCompanyCode?: string;
 }
 
 // ─── Issue #16: Multi-Bin, Lot/Batch & Expiry Date Management (FEFO) ──────────
@@ -924,4 +937,93 @@ export interface UserScope {
   allowedDepartmentIds: string[];
   /** Maximum financial approval authorization amount in BDT (0 for none, Infinity for Group CEO) */
   financialApprovalLimit: number;
+}
+
+// ─── Phase 6 (Issue #19): Inter-Company Sales Orders ─────────────────────────
+
+export type SOStatus = 'Draft' | 'Confirmed' | 'In Progress' | 'Delivered' | 'Billed' | 'Cancelled';
+
+export interface SalesOrderLine {
+  id: string;
+  sku: string;
+  description: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  lineTotal: number;
+  taxRatePct?: number;
+  taxAmount?: number;
+  sourcePoLineId?: string;
+}
+
+export interface SalesOrder {
+  id: string;
+  soNumber: string;
+  customerName: string;
+  customerCompanyId?: string;
+  companyId: string;
+  companyName: string;
+  lines: SalesOrderLine[];
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  status: SOStatus;
+  isInterCompany: boolean;
+  sourcePoId?: string;
+  sourcePoNumber?: string;
+  mirroredInvoiceId?: string;
+  createdAt: string;
+  createdBy: string;
+  deliveryDate?: string;
+  paymentTerms?: string;
+  notes?: string;
+}
+
+// ─── Phase 6 (Issue #20): Financial Consolidation & Elimination Entries ───────
+
+export interface EliminationEntry {
+  id: string;
+  ruleId: string;
+  ruleName: string;
+  sourceEntityId: string;
+  sourceEntityName: string;
+  targetEntityId: string;
+  targetEntityName: string;
+  description: string;
+  referenceDoc: string;
+  debitAccountCode: string;
+  debitAccountName: string;
+  creditAccountCode: string;
+  creditAccountName: string;
+  amount: number;
+  status: 'active' | 'applied';
+}
+
+export interface ConsolidationReportLine {
+  category: string;
+  accountCode?: string;
+  accountName: string;
+  isHeader?: boolean;
+  isSubtotal?: boolean;
+  isTotal?: boolean;
+  entities: Record<string, number>;
+  combinedTotal: number;
+  eliminationAdjustments: number;
+  consolidatedNet: number;
+}
+
+export interface ConsolidationSummary {
+  currency: string;
+  asOfDate: string;
+  totalEntities: number;
+  combinedRevenue: number;
+  eliminatedRevenue: number;
+  consolidatedRevenue: number;
+  combinedExpense: number;
+  eliminatedExpense: number;
+  consolidatedExpense: number;
+  consolidatedNetProfit: number;
+  eliminatedReceivables: number;
+  eliminatedPayables: number;
+  eliminationEntries: EliminationEntry[];
 }

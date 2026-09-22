@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { XIcon, PlusIcon, Trash2Icon, FileTextIcon, AlertTriangleIcon } from 'lucide-react';
+import { XIcon, PlusIcon, Trash2Icon, FileTextIcon, AlertTriangleIcon, ArrowRightLeftIcon } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { createPurchaseOrder, purchaseRequests, suppliers } from '../../data/operations';
 import { companies } from '../../data/organization';
@@ -39,6 +39,8 @@ export function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }: CreateP
 
   const targetCompany = companies.find((c) => c.id === companyId) || companies[0];
   const approvedRequestsForCompany = purchaseRequests.filter((p) => p.status === 'approved' && p.company === targetCompany.name);
+  const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+  const availableSuppliers = suppliers.filter((s) => !s.isSisterConcern || s.sisterCompanyId !== targetCompany.id);
 
   const handleAddLine = () => {
     setLines((prev) => [...prev, { id: `l-${Date.now()}`, sku: '', description: '', qty: '1', unit: 'Unit', unitPrice: '0', taxRatePct: '15' }]);
@@ -100,23 +102,30 @@ export function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }: CreateP
     }
   };
 
+  const subtotal = lines.reduce((acc, l) => acc + (parseFloat(l.qty) || 0) * (parseFloat(l.unitPrice) || 0), 0);
+  const tax = lines.reduce(
+    (acc, l) => acc + (parseFloat(l.qty) || 0) * (parseFloat(l.unitPrice) || 0) * ((parseFloat(l.taxRatePct) || 0) / 100),
+    0
+  );
+  const total = subtotal + tax;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
       <div
-        className="w-full max-w-2xl rounded-2xl border border-line bg-surface p-6 shadow-pop animate-in zoom-in-95 duration-150 my-8"
+        className="w-full max-w-4xl rounded-2xl border border-line bg-surface p-6 shadow-pop animate-in zoom-in-95 duration-150 my-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between border-b border-line pb-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-              <FileTextIcon className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-ink">New Purchase Order</h2>
-              <p className="text-xs text-muted">Raised directly with a supplier — no RFQ sourcing step.</p>
-            </div>
+          <div>
+            <h2 className="text-lg font-bold text-ink">New Purchase Order</h2>
+            <p className="text-xs text-muted">
+              Issue a binding procurement order to an approved supplier or sister concern entity.
+            </p>
           </div>
-          <button onClick={handleClose} className="rounded-lg p-1 text-muted hover:bg-canvas hover:text-ink transition-colors">
+          <button
+            onClick={handleClose}
+            className="rounded-lg p-1 text-muted hover:bg-canvas hover:text-ink transition-colors"
+          >
             <XIcon className="h-5 w-5" />
           </button>
         </div>
@@ -124,7 +133,7 @@ export function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }: CreateP
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-subtle/70 p-3.5 rounded-xl border border-line">
             <div>
-              <label className="block text-2xs font-semibold uppercase tracking-wider text-faint mb-1">Legal Entity</label>
+              <label className="block text-2xs font-semibold uppercase tracking-wider text-faint mb-1">Legal Entity (Buyer)</label>
               <select
                 value={companyId}
                 onChange={(e) => {
@@ -140,17 +149,31 @@ export function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }: CreateP
             </div>
 
             <div>
-              <label className="block text-2xs font-semibold uppercase tracking-wider text-faint mb-1">Supplier</label>
+              <label className="block text-2xs font-semibold uppercase tracking-wider text-faint mb-1">Supplier / Vendor</label>
               <select
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
                 className="h-8 w-full rounded border border-line bg-canvas px-2 text-xs text-ink focus:border-accent focus:outline-none"
               >
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.category})</option>
+                {availableSuppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.isSisterConcern ? `🏢 [Inter-Company] ${s.name}` : `${s.name} (${s.category})`}
+                  </option>
                 ))}
               </select>
             </div>
+
+            {selectedSupplier?.isSisterConcern && (
+              <div className="col-span-full flex items-start gap-2.5 rounded-lg border border-accent/40 bg-accent-soft/30 p-2.5 text-xs text-ink">
+                <ArrowRightLeftIcon className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                <div>
+                  <span className="font-semibold text-accent">⚡ Inter-Company Auto-Mirroring Active:</span>
+                  <span className="ml-1 text-muted">
+                    Issuing this PO to sister concern <strong className="text-ink">{selectedSupplier.name}</strong> will automatically generate a synchronized Sales Order in their order book with identical line items and rates.
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-2xs font-semibold uppercase tracking-wider text-faint mb-1">Linked Requisition (optional)</label>

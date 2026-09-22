@@ -23,10 +23,13 @@ import type {
   StockTransferOrder,
   StockTransferLine,
   TransferStatus,
-  JournalEntry
+  JournalEntry,
+  SalesOrder,
+  SalesOrderLine,
+  SOStatus
 } from '../types';
 import { getCostCenterBudget, commitCostCenterEncumbrance, branchPlants } from './organization';
-import { getInvoices, approveInvoiceForPayment, rejectInvoice, postJournalEntry } from './finance';
+import { getInvoices, approveInvoiceForPayment, rejectInvoice, postJournalEntry, createMirroredInterCompanyInvoices } from './finance';
 import { recordAuditEvent } from './system';
 import { employees, getLeaveRequests, decideLeaveRequest } from './people';
 
@@ -147,13 +150,20 @@ export const procurementPipeline = [
 
 
 export const suppliers: Supplier[] = [
-{ id: 'sup-meghna', name: 'Meghna Packaging Ltd.', category: 'Packaging', spend: 42800000, orders: 64, rating: 4.6 },
-{ id: 'sup-padma', name: 'Padma Oil Company', category: 'Fuel & Lubricants', spend: 38100000, orders: 41, rating: 4.1 },
-{ id: 'sup-bengal-steel', name: 'Bengal Steel Works', category: 'Engineering', spend: 21400000, orders: 28, rating: 4.4 },
-{ id: 'sup-rangs', name: 'Rangs Logistics', category: 'Transport Services', spend: 17600000, orders: 92, rating: 3.8 },
-{ id: 'sup-southeast-tech', name: 'Southeast Tech Distribution', category: 'IT Hardware & Electronics', spend: 15200000, orders: 34, rating: 4.3 },
-{ id: 'sup-rahman-computer', name: 'Rahman Computer Source', category: 'IT Hardware & Electronics', spend: 6100000, orders: 12, rating: 4.5 },
-{ id: 'sup-grameen-fleet', name: 'Grameen Fleet Solutions', category: 'Fleet & Telematics', spend: 8600000, orders: 19, rating: 4.0 }];
+  // Inter-Company Sister Concerns
+  { id: 'sup-ic-transport', name: 'ABC Transport Ltd.', category: 'Logistics & Fleet', spend: 64500000, orders: 112, rating: 4.8, isSisterConcern: true, sisterCompanyId: 'c-transport', interCompanyCode: 'IC-TRANSPORT' },
+  { id: 'sup-ic-tech', name: 'ABC Technologies Ltd.', category: 'IT Services & Cloud Hosting', spend: 28400000, orders: 45, rating: 4.9, isSisterConcern: true, sisterCompanyId: 'c-tech', interCompanyCode: 'IC-TECH' },
+  { id: 'sup-ic-foods', name: 'ABC Foods Ltd.', category: 'Food & Raw Materials', spend: 31200000, orders: 58, rating: 4.7, isSisterConcern: true, sisterCompanyId: 'c-foods', interCompanyCode: 'IC-FOODS' },
+  { id: 'sup-ic-textile', name: 'ABC Textiles Ltd.', category: 'Textiles & Staff Uniforms', spend: 12500000, orders: 24, rating: 4.5, isSisterConcern: true, sisterCompanyId: 'c-textile', interCompanyCode: 'IC-TEXTILE' },
+  // External Suppliers
+  { id: 'sup-meghna', name: 'Meghna Packaging Ltd.', category: 'Packaging', spend: 42800000, orders: 64, rating: 4.6 },
+  { id: 'sup-padma', name: 'Padma Oil Company', category: 'Fuel & Lubricants', spend: 38100000, orders: 41, rating: 4.1 },
+  { id: 'sup-bengal-steel', name: 'Bengal Steel Works', category: 'Engineering', spend: 21400000, orders: 28, rating: 4.4 },
+  { id: 'sup-rangs', name: 'Rangs Logistics', category: 'Transport Services', spend: 17600000, orders: 92, rating: 3.8 },
+  { id: 'sup-southeast-tech', name: 'Southeast Tech Distribution', category: 'IT Hardware & Electronics', spend: 15200000, orders: 34, rating: 4.3 },
+  { id: 'sup-rahman-computer', name: 'Rahman Computer Source', category: 'IT Hardware & Electronics', spend: 6100000, orders: 12, rating: 4.5 },
+  { id: 'sup-grameen-fleet', name: 'Grameen Fleet Solutions', category: 'Fleet & Telematics', spend: 8600000, orders: 19, rating: 4.0 }
+];
 
 
 export let stock: StockItem[] = [
@@ -719,6 +729,7 @@ const poLine0002 = buildPOLine({ id: 'pol-0002-1', sku: 'FUEL-DIESEL-BULK', desc
 // demonstrates the warehouse goods-arrival trigger against real, recognizable Inventory data.
 const poLine0003 = buildPOLine({ id: 'pol-0003-1', sku: 'PK-FILM-080', description: 'Packaging Film — 80 micron', qty: 1200, unit: 'Roll', unitPrice: 620, qtyReceived: 0 });
 const poLine0004 = buildPOLine({ id: 'pol-0004-1', sku: 'ENG-BRACKET-STD', description: 'Steel Mounting Brackets — Standard', qty: 500, unit: 'Unit', unitPrice: 340, qtyReceived: 500 });
+const poLine0005 = buildPOLine({ id: 'pol-0005-1', sku: 'LOG-TRUCK-50T', description: 'Heavy Freight Logistics — Chattogram to Savar Corridor', qty: 15, unit: 'Trip', unitPrice: 300000, taxRatePct: 15, qtyReceived: 0 });
 
 export const initialPurchaseOrders: PurchaseOrder[] = [
   {
@@ -812,12 +823,79 @@ export const initialPurchaseOrders: PurchaseOrder[] = [
     approvedAt: '2026-09-02T13:00:00Z',
     issuedAt: '2026-09-02T13:00:00Z',
     closedAt: '2026-09-09T10:30:00Z'
+  },
+  {
+    id: 'po-2026-0005',
+    poNumber: 'PO-2026-0005',
+    supplierId: 'sup-ic-transport',
+    supplierName: 'ABC Transport Ltd.',
+    companyId: 'c-foods',
+    companyName: 'ABC Foods Ltd.',
+    deliveryAddress: getCompanyDeliveryAddress('c-foods'),
+    lines: [poLine0005],
+    ...totalsFromLines([poLine0005]),
+    paymentTerms: 'Net 30 — Sister Concern',
+    status: 'Issued',
+    statusHistory: [
+      { status: 'Draft', at: '2026-09-14T09:00:00Z', by: 'Imran Hossain' },
+      { status: 'Pending Approval', at: '2026-09-14T09:30:00Z', by: 'Imran Hossain' },
+      { status: 'Issued', at: '2026-09-14T11:00:00Z', by: 'Rahim Ahmed', note: 'Auto-mirrored to SO-IC-2026-0001 in ABC Transport Ltd.' }
+    ],
+    createdAt: '2026-09-14T09:00:00Z',
+    createdBy: 'Imran Hossain',
+    approvedBy: 'Rahim Ahmed',
+    approvedAt: '2026-09-14T11:00:00Z',
+    issuedAt: '2026-09-14T11:00:00Z',
+    isInterCompany: true,
+    sisterCompanyId: 'c-transport',
+    interCompanyCode: 'IC-TRANSPORT',
+    mirroredSalesOrderId: 'so-ic-2026-0001'
+  }
+];
+
+// ─── Phase 6 (Issue #19): Seeded Sales Orders (Auto-Mirrored) ─────────────────
+
+export const initialSalesOrders: SalesOrder[] = [
+  {
+    id: 'so-ic-2026-0001',
+    soNumber: 'SO-IC-2026-0001',
+    customerName: 'ABC Foods Ltd.',
+    customerCompanyId: 'c-foods',
+    companyId: 'c-transport',
+    companyName: 'ABC Transport Ltd.',
+    lines: [
+      {
+        id: 'sol-0001-1',
+        sku: 'LOG-TRUCK-50T',
+        description: 'Heavy Freight Logistics — Chattogram to Savar Corridor',
+        qty: 15,
+        unit: 'Trip',
+        unitPrice: 300000,
+        taxRatePct: 15,
+        taxAmount: 675000,
+        lineTotal: 4500000,
+        sourcePoLineId: 'pol-0005-1'
+      }
+    ],
+    subtotal: 4500000,
+    taxAmount: 675000,
+    totalAmount: 5175000,
+    status: 'Confirmed',
+    isInterCompany: true,
+    sourcePoId: 'po-2026-0005',
+    sourcePoNumber: 'PO-2026-0005',
+    mirroredInvoiceId: 'INV-IC-2026-000101',
+    createdAt: '2026-09-14T11:00:00Z',
+    createdBy: 'Automated Mirror Engine (from PO-2026-0005)'
   }
 ];
 
 export let rfqs: RFQ[] = initialRFQs.map((r) => ({ ...r, items: [...r.items], invitedSuppliers: [...r.invitedSuppliers], quotes: r.quotes.map((q) => ({ ...q, items: [...q.items] })) }));
 export let purchaseOrders: PurchaseOrder[] = initialPurchaseOrders.map((po) => ({ ...po, lines: [...po.lines], statusHistory: [...po.statusHistory] }));
+export let salesOrders: SalesOrder[] = initialSalesOrders.map((so) => ({ ...so, lines: [...so.lines] }));
+
 const rfqListeners: Array<() => void> = [];
+const soListeners: Array<() => void> = [];
 
 export function getRFQs(): RFQ[] {
   return rfqs.map((r) => ({ ...r, items: [...r.items], invitedSuppliers: [...r.invitedSuppliers], quotes: r.quotes.map((q) => ({ ...q, items: [...q.items] })) }));
@@ -827,12 +905,28 @@ export function getPurchaseOrders(): PurchaseOrder[] {
   return purchaseOrders.map((po) => ({ ...po, lines: [...po.lines], statusHistory: [...po.statusHistory] }));
 }
 
+export function getSalesOrders(): SalesOrder[] {
+  return salesOrders.map((so) => ({ ...so, lines: [...so.lines] }));
+}
+
 export function subscribeRFQs(listener: () => void): () => void {
   rfqListeners.push(listener);
   return () => {
     const idx = rfqListeners.indexOf(listener);
     if (idx !== -1) rfqListeners.splice(idx, 1);
   };
+}
+
+export function subscribeSalesOrders(listener: () => void): () => void {
+  soListeners.push(listener);
+  return () => {
+    const idx = soListeners.indexOf(listener);
+    if (idx !== -1) soListeners.splice(idx, 1);
+  };
+}
+
+function notifySalesOrders(): void {
+  soListeners.forEach((l) => l());
 }
 
 function notifyRFQs(): void {
@@ -1019,6 +1113,12 @@ export function createPurchaseOrder(data: {
     buildPOLine({ id: `pol-${id.slice(-4)}-${nextPoLineSeq++}`, ...l })
   );
 
+  const isInterCompany = Boolean(supplier.isSisterConcern);
+  const sisterCompanyId = supplier.sisterCompanyId || undefined;
+  const interCompanyCode = supplier.interCompanyCode || undefined;
+
+  let mirroredSalesOrderId: string | undefined = undefined;
+
   const purchaseOrder: PurchaseOrder = {
     id,
     poNumber,
@@ -1034,12 +1134,122 @@ export function createPurchaseOrder(data: {
     status: 'Draft',
     statusHistory: [{ status: 'Draft', at: now, by: data.createdBy }],
     createdAt: now,
-    createdBy: data.createdBy
+    createdBy: data.createdBy,
+    isInterCompany,
+    sisterCompanyId,
+    interCompanyCode
   };
+
+  // Phase 6 (Issue #19): Auto-mirror Sales Order if supplier is a Sister Concern
+  if (isInterCompany && sisterCompanyId) {
+    const soId = `so-ic-${id.replace('po-', '')}`;
+    const soNumber = `SO-IC-${poNumber.replace('PO-', '')}`;
+    mirroredSalesOrderId = soId;
+    purchaseOrder.mirroredSalesOrderId = soId;
+
+    const mirroredSO: SalesOrder = {
+      id: soId,
+      soNumber,
+      customerName: data.companyName,
+      customerCompanyId: data.companyId,
+      companyId: sisterCompanyId,
+      companyName: supplier.name,
+      lines: lines.map((l) => ({
+        id: `sol-${l.id.replace('pol-', '')}`,
+        sku: l.sku,
+        description: l.description,
+        qty: l.qty,
+        unit: l.unit,
+        unitPrice: l.unitPrice,
+        lineTotal: l.lineTotal,
+        taxRatePct: l.taxRatePct,
+        taxAmount: l.taxAmount,
+        sourcePoLineId: l.id
+      })),
+      subtotal: purchaseOrder.subtotal,
+      taxAmount: purchaseOrder.taxAmount,
+      totalAmount: purchaseOrder.totalAmount,
+      status: 'Confirmed',
+      isInterCompany: true,
+      sourcePoId: id,
+      sourcePoNumber: poNumber,
+      createdAt: now,
+      createdBy: `Automated Mirror Engine (from ${poNumber})`
+    };
+
+    salesOrders = [mirroredSO, ...salesOrders];
+    notifySalesOrders();
+
+    recordAuditEvent({
+      user: data.createdBy,
+      action: 'AUTO_MIRROR_SALES_ORDER',
+      resource: `${poNumber} → ${soNumber}`,
+      company: `${data.companyName} → ${supplier.name}`,
+      before: '—',
+      after: `Auto-generated matched Sales Order in sister concern ${supplier.name}`
+    });
+  }
 
   purchaseOrders = [purchaseOrder, ...purchaseOrders];
   notifyRFQs();
   return purchaseOrder;
+}
+
+/**
+ * Phase 6 (Issue #19): Issue a Sales Order invoice.
+ * Generates the Sales Invoice (Receivable) in the seller entity and
+ * automatically creates the draft matching Supplier Invoice (Payable) in the buyer entity.
+ */
+export function issueSalesOrderInvoice(soId: string, by: string): {
+  salesOrder: SalesOrder;
+  salesInvoiceId: string;
+  purchaseInvoiceId: string;
+} {
+  const so = salesOrders.find((s) => s.id === soId);
+  if (!so) throw new Error('Sales Order not found.');
+  if (so.status === 'Billed') throw new Error('This Sales Order has already been invoiced.');
+
+  const { salesInvoice, supplierInvoice } = createMirroredInterCompanyInvoices({
+    salesOrderId: so.id,
+    sourcePoId: so.sourcePoId,
+    sellerCompanyName: so.companyName,
+    buyerCompanyName: so.customerName,
+    amount: so.totalAmount,
+    lines: so.lines.map((l) => ({
+      sku: l.sku,
+      description: l.description,
+      qty: l.qty,
+      unit: l.unit,
+      unitPrice: l.unitPrice,
+      lineTotal: l.lineTotal,
+      sourcePoLineId: l.sourcePoLineId
+    })),
+    by
+  });
+
+  const updatedSO: SalesOrder = {
+    ...so,
+    status: 'Billed',
+    mirroredInvoiceId: salesInvoice.id
+  };
+
+  salesOrders = salesOrders.map((s) => (s.id === soId ? updatedSO : s));
+  notifySalesOrders();
+
+  recordAuditEvent({
+    user: by,
+    action: 'ISSUE_INTERCOMPANY_SALES_INVOICE',
+    resource: `${so.soNumber} → ${salesInvoice.id}`,
+    company: so.companyName,
+    before: `Status: ${so.status}`,
+    after: `Billed — Generated ${salesInvoice.id} in ${so.companyName} & mirrored ${supplierInvoice.id} in ${so.customerName}`
+  });
+
+  return {
+    salesOrder: updatedSO,
+    salesInvoiceId: salesInvoice.id,
+    purchaseInvoiceId: supplierInvoice.id
+  };
 }
 
 const PO_TRANSITIONS: Record<POStatus, POStatus[]> = {
@@ -1076,7 +1286,17 @@ export function submitPurchaseOrderForApproval(poId: string, by: string): Purcha
 }
 
 export function approvePurchaseOrder(poId: string, by: string): PurchaseOrder {
-  return transitionPO(poId, 'Issued', by, 'Approved and issued to supplier', { approvedBy: by, approvedAt: new Date().toISOString(), issuedAt: new Date().toISOString() });
+  const updated = transitionPO(poId, 'Issued', by, 'Approved and issued to supplier', { approvedBy: by, approvedAt: new Date().toISOString(), issuedAt: new Date().toISOString() });
+
+  // Phase 6 (Issue #19): If this PO is inter-company, ensure mirrored SO is active/confirmed
+  if (updated.isInterCompany && updated.mirroredSalesOrderId) {
+    const so = salesOrders.find((s) => s.id === updated.mirroredSalesOrderId);
+    if (so && so.status === 'Draft') {
+      salesOrders = salesOrders.map((s) => (s.id === so.id ? { ...s, status: 'Confirmed' } : s));
+      notifySalesOrders();
+    }
+  }
+  return updated;
 }
 
 export function sendPurchaseOrderBackToDraft(poId: string, by: string, note: string): PurchaseOrder {

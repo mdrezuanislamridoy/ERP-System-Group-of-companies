@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowRightLeftIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/ui/Panel';
 import { Metric, MetricRow } from '../components/ui/Metric';
@@ -80,6 +81,9 @@ export function FinanceOverview() {
         actions={
           <>
             <Button onClick={() => navigate('/finance/accounts')}>General Ledger & Accounts</Button>
+            <Button variant="secondary" onClick={() => navigate('/reports?report=Consolidated+P%26L')}>
+              Consolidation Workbench
+            </Button>
             <Button variant="secondary" onClick={() => navigate('/finance/bank-reconciliation')}>
               Bank Reconciliation
             </Button>
@@ -96,6 +100,26 @@ export function FinanceOverview() {
       
 
       <div className="space-y-4 p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent-soft/20 p-3.5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
+              <ArrowRightLeftIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-ink">Group Financial Consolidation Active</span>
+                <Badge tone="success" className="text-2xs">IFRS 10 Compliant</Badge>
+              </div>
+              <p className="text-xs text-muted">
+                ৳7.10 Cr in internal sister-concern sales and procurement balances automatically eliminated from group revenue and liabilities.
+              </p>
+            </div>
+          </div>
+          <Button size="xs" variant="primary" onClick={() => navigate('/reports?report=Consolidated+P%26L')}>
+            View Consolidation Workbench →
+          </Button>
+        </div>
+
         <MetricRow>
           {financeKpis.map((k, i) =>
           <Metric key={k.label} {...k} emphasis={i === 0} />
