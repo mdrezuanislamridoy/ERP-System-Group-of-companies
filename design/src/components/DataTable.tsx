@@ -61,6 +61,7 @@ export function DataTable<T>({
   searchIn,
   filters = [],
   selectable = false,
+  bulkActions,
   toolbarRight,
   onRowClick,
   onExport,

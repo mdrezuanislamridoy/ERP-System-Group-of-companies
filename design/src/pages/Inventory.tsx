@@ -369,7 +369,7 @@ export function Inventory() {
           <Metric label="Quarantine / Damaged" value={totalQuarantine.toLocaleString('en-IN')} tone="danger" sub="Held off shelves" />
           <Metric
             label="Expiring Batches"
-            value={urgentBatchesCount}
+            value={String(urgentBatchesCount)}
             tone={urgentBatchesCount > 0 ? 'danger' : 'neutral'}
             sub="Expiring within 30 days"
           />

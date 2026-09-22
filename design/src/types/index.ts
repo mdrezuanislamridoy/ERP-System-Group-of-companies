@@ -629,6 +629,16 @@ export interface ReturnToVendorTicket {
   createdBy: string;
 }
 
+// ─── Issue #21: Tamper-Evident Deep State Diff Audit Trail ──────────────────
+
+export interface AuditActor {
+  userId: string;
+  role: string;
+  ip: string;
+  userAgent: string;
+  deviceFingerprint?: string;
+}
+
 export interface AuditEvent {
   id: string;
   time: string;
@@ -639,8 +649,39 @@ export interface AuditEvent {
   ip: string;
   device: string;
   correlation: string;
-  before?: string;
-  after?: string;
+  before?: string; // backwards compatibility
+  after?: string;  // backwards compatibility
+  beforeState?: Record<string, any>;
+  afterState?: Record<string, any>;
+  actor?: AuditActor;
+  justificationReason?: string;
+  previousHash: string;
+  currentHash: string;
+}
+
+export interface ChainVerificationResult {
+  isValid: boolean;
+  totalBlocks: number;
+  tamperedIndex?: number;
+  tamperedEventId?: string;
+  errorMessage?: string;
+  verifiedAt: string;
+}
+
+// ─── Issue #22: Active Session Security & Device Management ─────────────────
+
+export interface ActiveSession {
+  sessionId: string;
+  userId: string;
+  userName?: string;
+  device: string;
+  browser: string;
+  os: string;
+  ip: string;
+  location: string;
+  lastActive: string;
+  isCurrent: boolean;
+  createdAt: string;
 }
 
 export interface NotificationItem {

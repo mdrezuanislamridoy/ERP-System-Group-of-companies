@@ -18,6 +18,8 @@ import type {
   ApprovalItemType,
   ApprovalNote,
   ApprovalDomain,
+  DelegationRule,
+  DelegationScope,
   ItemBatch,
   BatchStatus,
   StockTransferOrder,
