@@ -1456,3 +1456,13 @@ export function approveInvoiceForPayment(invoiceId: string, by: string): Invoice
   notifyInvoiceOverrides();
   return updated;
 }
+
+export function rejectInvoice(invoiceId: string): Invoice {
+  const invoice = invoices.find((i) => i.id === invoiceId);
+  if (!invoice) throw new Error('Invoice not found.');
+
+  const updated: Invoice = { ...invoice, status: 'rejected' };
+  invoices = invoices.map((i) => (i.id === invoiceId ? updated : i));
+  notifyInvoiceOverrides();
+  return updated;
+}

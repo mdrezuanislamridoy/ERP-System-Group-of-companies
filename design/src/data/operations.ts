@@ -13,9 +13,14 @@ import type {
   GoodsReceiptNote,
   GRNLine,
   ReturnToVendorTicket,
-  RTVStatus
+  RTVStatus,
+  ApprovalItem,
+  ApprovalItemType,
+  ApprovalNote
 } from '../types';
 import { getCostCenterBudget, commitCostCenterEncumbrance, branchPlants } from './organization';
+import { getInvoices, approveInvoiceForPayment, rejectInvoice } from './finance';
+import { employees, getLeaveRequests, decideLeaveRequest } from './people';
 
 export const initialPurchaseRequests: PurchaseRequest[] = [
 { id: 'PR-2026-00192', title: 'Raw material procurement — Q4 rice & edible oil', requester: 'Imran Hossain', department: 'Production', company: 'ABC Foods Ltd.', amount: 850000, created: '20 Sep 2026', stage: 'Finance Manager', status: 'pending', priority: 'High', costCenterId: 'cc-foods-proc-001', costCenterCode: 'CC-FOODS-PROC-001' },
@@ -89,6 +94,21 @@ export function createPurchaseRequest(data: {
   purchaseRequests = [newRequest, ...purchaseRequests];
   prListeners.forEach((l) => l());
   return newRequest;
+}
+
+export function decidePurchaseRequest(prId: string, decision: 'approved' | 'rejected', by: string): PurchaseRequest {
+  const request = purchaseRequests.find((p) => p.id === prId);
+  if (!request) throw new Error('Purchase Request not found.');
+  if (request.status !== 'pending') throw new Error(`This request is already ${request.status}.`);
+
+  const updated: PurchaseRequest = {
+    ...request,
+    status: decision,
+    stage: decision === 'approved' ? 'Completed' : `Rejected by ${by}`
+  };
+  purchaseRequests = purchaseRequests.map((p) => (p.id === prId ? updated : p));
+  prListeners.forEach((l) => l());
+  return updated;
 }
 
 
@@ -936,4 +956,199 @@ export function setReturnToVendorStatus(rtvId: string, status: RTVStatus): Retur
   returnToVendorTickets = returnToVendorTickets.map((t) => (t.id === rtvId ? updated : t));
   notifyInventory();
   return updated;
+}
+
+// ─── Issue #13: Unified Multi-Domain Approval Inbox ──────────────────────────
+// Aggregates pending work from every domain store into one polymorphic list. Each ApprovalItem
+// is a thin read projection — decideApprovalItem() dispatches back to the real domain function
+// (decidePurchaseRequest, approveInvoiceForPayment, approvePurchaseOrder, decideLeaveRequest),
+// so every module's own rules (3-Way Match gate, PO status machine, etc.) still apply.
+
+const BULK_APPROVAL_THRESHOLD = 20000;
+const PRIORITY_WEIGHT: Record<ApprovalItem['priority'], number> = { Critical: 3, High: 2, Normal: 1, Low: 0 };
+
+const approvalNotesStore: Record<string, ApprovalNote[]> = {};
+const approvalInboxListeners: Array<() => void> = [];
+
+function approvalNoteKey(type: ApprovalItemType, sourceId: string): string {
+  return `${type}:${sourceId}`;
+}
+
+function getApprovalNotesFor(type: ApprovalItemType, sourceId: string): ApprovalNote[] {
+  return approvalNotesStore[approvalNoteKey(type, sourceId)] || [];
+}
+
+function recordApprovalNote(type: ApprovalItemType, sourceId: string, note: ApprovalNote): void {
+  const key = approvalNoteKey(type, sourceId);
+  approvalNotesStore[key] = [...(approvalNotesStore[key] || []), note];
+}
+
+export function subscribeApprovalInbox(listener: () => void): () => void {
+  approvalInboxListeners.push(listener);
+  return () => {
+    const idx = approvalInboxListeners.indexOf(listener);
+    if (idx !== -1) approvalInboxListeners.splice(idx, 1);
+  };
+}
+
+function notifyApprovalInbox(): void {
+  approvalInboxListeners.forEach((l) => l());
+}
+
+export function getApprovalInbox(): ApprovalItem[] {
+  const items: ApprovalItem[] = [];
+
+  for (const pr of purchaseRequests) {
+    if (pr.status !== 'pending') continue;
+    const isBudgetOverride = Boolean(pr.budgetOverrun && pr.escalationRequired);
+    const type: ApprovalItemType = isBudgetOverride ? 'budget_override' : 'purchase_request';
+    items.push({
+      id: `${type}-${pr.id}`,
+      type,
+      domain: isBudgetOverride ? 'Finance' : 'Procurement',
+      sourceId: pr.id,
+      title: pr.title,
+      subtitle: isBudgetOverride
+        ? `Exceeds Cost Center headroom by ৳${(pr.overrunAmount || 0).toLocaleString('en-IN')} — CFO variance sign-off required`
+        : `${pr.department} · ${pr.costCenterCode || 'Unbudgeted'}`,
+      requester: pr.requester,
+      company: pr.company,
+      department: pr.department,
+      amount: pr.amount,
+      priority: isBudgetOverride ? 'Critical' : pr.priority,
+      status: 'pending',
+      createdAt: pr.created,
+      stage: pr.stage,
+      bulkEligible: !isBudgetOverride && pr.amount < BULK_APPROVAL_THRESHOLD,
+      history: [{ label: 'Submitted', actor: pr.requester, state: 'done', time: pr.created }],
+      notes: getApprovalNotesFor(type, pr.id)
+    });
+  }
+
+  for (const inv of getInvoices()) {
+    if (inv.status !== 'pending' || inv.type !== 'Payable') continue;
+    const isDiscrepancy = inv.matchStatus === 'Discrepancy';
+    items.push({
+      id: `supplier_invoice-${inv.id}`,
+      type: 'supplier_invoice',
+      domain: 'Finance',
+      sourceId: inv.id,
+      title: `Invoice from ${inv.party}`,
+      subtitle: inv.poId ? `3-Way Match: ${inv.matchStatus || 'Unmatched'}` : `Due ${inv.due}`,
+      requester: inv.party,
+      company: inv.company,
+      amount: inv.amount,
+      priority: isDiscrepancy ? 'High' : 'Normal',
+      status: 'pending',
+      createdAt: inv.issued,
+      stage: isDiscrepancy ? 'Blocked — 3-Way Match Discrepancy' : 'Awaiting Accounts Payable approval',
+      bulkEligible: !isDiscrepancy && inv.amount < BULK_APPROVAL_THRESHOLD,
+      history: [
+        { label: 'Invoice received', actor: inv.party, state: 'done', time: inv.issued },
+        ...(inv.poId
+          ? [{ label: `3-Way Match: ${inv.matchStatus || 'Unmatched'}`, actor: 'System', state: (isDiscrepancy ? 'rejected' : 'done') as ApprovalStep['state'], time: inv.issued }]
+          : [])
+      ],
+      notes: getApprovalNotesFor('supplier_invoice', inv.id)
+    });
+  }
+
+  for (const po of purchaseOrders) {
+    if (po.status !== 'Pending Approval') continue;
+    items.push({
+      id: `payment_voucher-${po.id}`,
+      type: 'payment_voucher',
+      domain: 'Finance',
+      sourceId: po.id,
+      title: `${po.poNumber} — ${po.supplierName}`,
+      subtitle: `${po.lines.length} line(s) · ${po.paymentTerms}`,
+      requester: po.createdBy,
+      company: po.companyName,
+      amount: po.totalAmount,
+      priority: 'Normal',
+      status: 'pending',
+      createdAt: po.createdAt.slice(0, 10),
+      stage: 'Pending Approval — Purchase Order',
+      bulkEligible: po.totalAmount < BULK_APPROVAL_THRESHOLD,
+      history: po.statusHistory.map((h) => ({ label: h.status, actor: h.by, state: 'done' as const, time: h.at.slice(0, 10), note: h.note })),
+      notes: getApprovalNotesFor('payment_voucher', po.id)
+    });
+  }
+
+  for (const lv of getLeaveRequests()) {
+    if (lv.status !== 'pending') continue;
+    const emp = employees.find((e) => e.name === lv.employee);
+    items.push({
+      id: `leave_application-${lv.id}`,
+      type: 'leave_application',
+      domain: 'HR',
+      sourceId: lv.id,
+      title: `${lv.type} — ${lv.employee}`,
+      subtitle: `${lv.from} → ${lv.to} (${lv.days} day${lv.days > 1 ? 's' : ''})`,
+      requester: lv.employee,
+      company: emp?.company || 'ABC Foods Ltd.',
+      department: emp?.department,
+      priority: lv.days >= 7 ? 'High' : 'Normal',
+      status: 'pending',
+      createdAt: lv.from,
+      stage: 'Awaiting manager approval',
+      bulkEligible: true,
+      history: [{ label: 'Submitted', actor: lv.employee, state: 'done', time: lv.from }],
+      notes: getApprovalNotesFor('leave_application', lv.id)
+    });
+  }
+
+  return items.sort((a, b) => PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority]);
+}
+
+export function decideApprovalItem(item: ApprovalItem, decision: 'approved' | 'rejected', by: string, comment?: string): void {
+  switch (item.type) {
+    case 'purchase_request':
+    case 'budget_override':
+      decidePurchaseRequest(item.sourceId, decision, by);
+      break;
+    case 'supplier_invoice':
+      if (decision === 'approved') approveInvoiceForPayment(item.sourceId, by);
+      else rejectInvoice(item.sourceId);
+      break;
+    case 'payment_voucher':
+      if (decision === 'approved') approvePurchaseOrder(item.sourceId, by);
+      else cancelPurchaseOrder(item.sourceId, by, comment?.trim() || 'Rejected via unified approval inbox');
+      break;
+    case 'leave_application':
+      decideLeaveRequest(item.sourceId, decision, by, comment);
+      break;
+    case 'journal_entry':
+    default:
+      throw new Error('This item type does not support decisions from the unified inbox yet.');
+  }
+
+  if (comment && comment.trim()) {
+    recordApprovalNote(item.type, item.sourceId, { author: by, at: new Date().toISOString(), text: comment.trim(), decision });
+  }
+
+  notifyApprovalInbox();
+}
+
+/** Applies the same decision to every item, continuing past individual failures (e.g. a
+ *  Discrepancy invoice slipping into a bulk selection) and reporting which ones didn't go through. */
+export function decideApprovalItemsBulk(
+  items: ApprovalItem[],
+  decision: 'approved' | 'rejected',
+  by: string,
+  comment?: string
+): { succeeded: ApprovalItem[]; failed: Array<{ item: ApprovalItem; error: string }> } {
+  const succeeded: ApprovalItem[] = [];
+  const failed: Array<{ item: ApprovalItem; error: string }> = [];
+
+  for (const item of items) {
+    try {
+      decideApprovalItem(item, decision, by, comment);
+      succeeded.push(item);
+    } catch (err) {
+      failed.push({ item, error: err instanceof Error ? err.message : 'Failed to apply decision.' });
+    }
+  }
+
+  return { succeeded, failed };
 }

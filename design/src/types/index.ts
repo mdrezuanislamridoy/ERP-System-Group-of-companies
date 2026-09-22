@@ -563,6 +563,50 @@ export interface ApprovalStep {
   note?: string;
 }
 
+// ─── Issue #13: Unified Multi-Domain Approval Inbox ──────────────────────────
+
+export type ApprovalItemType =
+  | 'purchase_request'
+  | 'supplier_invoice'
+  | 'leave_application'
+  | 'payment_voucher'
+  | 'budget_override'
+  | 'journal_entry';
+
+export type ApprovalDomain = 'Procurement' | 'HR' | 'Finance' | 'Operations';
+
+export interface ApprovalNote {
+  author: string;
+  at: string;
+  text: string;
+  decision?: 'approved' | 'rejected';
+}
+
+/** A single polymorphic row in the unified inbox — a thin, read-only projection over the
+ *  underlying domain record (PR, invoice, leave request, PO...), never the record itself. */
+export interface ApprovalItem {
+  id: string;
+  type: ApprovalItemType;
+  domain: ApprovalDomain;
+  /** Id of the underlying domain record this item projects — what decision functions act on. */
+  sourceId: string;
+  title: string;
+  subtitle: string;
+  requester: string;
+  company: string;
+  companyId?: string;
+  department?: string;
+  amount?: number;
+  priority: 'Low' | 'Normal' | 'High' | 'Critical';
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  stage: string;
+  /** Amount-based low-risk eligibility for multi-select bulk approval (issue's ৳20,000 threshold). */
+  bulkEligible: boolean;
+  history: ApprovalStep[];
+  notes: ApprovalNote[];
+}
+
 // ─── Issue #01: Multi-Level Organizational Hierarchy ──────────────────────────
 // Represents the full ownership tree:
 //   Group → LegalEntity → BusinessUnit → BranchPlant → Department → CostCenter
