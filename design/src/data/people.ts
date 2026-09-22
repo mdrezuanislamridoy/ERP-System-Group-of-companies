@@ -38,11 +38,11 @@ export const attendanceToday = [
 
 
 export const initialLeaveRequests = [
-{ id: 'LV-2026-0412', employee: 'Hasan Mahmud', type: 'Annual Leave', from: '18 Sep 2026', to: '24 Sep 2026', days: 5, status: 'pending' as const },
-{ id: 'LV-2026-0409', employee: 'Farzana Yeasmin', type: 'Sick Leave', from: '16 Sep 2026', to: '17 Sep 2026', days: 2, status: 'approved' as const },
-{ id: 'LV-2026-0401', employee: 'Arif Islam', type: 'Casual Leave', from: '12 Sep 2026', to: '12 Sep 2026', days: 1, status: 'approved' as const },
-{ id: 'LV-2026-0398', employee: 'Jubayer Hossain', type: 'Unpaid Leave', from: '08 Sep 2026', to: '20 Sep 2026', days: 9, status: 'rejected' as const },
-{ id: 'LV-2026-0415', employee: 'Sabina Yasmin', type: 'Casual Leave', from: '24 Sep 2026', to: '25 Sep 2026', days: 2, status: 'pending' as const }];
+{ id: 'LV-2026-0412', employee: 'Hasan Mahmud', type: 'Annual Leave', submittedOn: '15 Sep 2026', from: '18 Sep 2026', to: '24 Sep 2026', days: 5, status: 'pending' as const },
+{ id: 'LV-2026-0409', employee: 'Farzana Yeasmin', type: 'Sick Leave', submittedOn: '14 Sep 2026', from: '16 Sep 2026', to: '17 Sep 2026', days: 2, status: 'approved' as const },
+{ id: 'LV-2026-0401', employee: 'Arif Islam', type: 'Casual Leave', submittedOn: '10 Sep 2026', from: '12 Sep 2026', to: '12 Sep 2026', days: 1, status: 'approved' as const },
+{ id: 'LV-2026-0398', employee: 'Jubayer Hossain', type: 'Unpaid Leave', submittedOn: '05 Sep 2026', from: '08 Sep 2026', to: '20 Sep 2026', days: 9, status: 'rejected' as const },
+{ id: 'LV-2026-0415', employee: 'Sabina Yasmin', type: 'Casual Leave', submittedOn: '21 Sep 2026', from: '24 Sep 2026', to: '25 Sep 2026', days: 2, status: 'pending' as const }];
 
 export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected';
 
@@ -50,6 +50,8 @@ export interface LeaveRequest {
   id: string;
   employee: string;
   type: string;
+  /** When the request was filed — distinct from `from` (the leave's start date), and the SLA clock's basis. */
+  submittedOn: string;
   from: string;
   to: string;
   days: number;

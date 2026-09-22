@@ -16,10 +16,14 @@ import type {
   RTVStatus,
   ApprovalItem,
   ApprovalItemType,
-  ApprovalNote
+  ApprovalNote,
+  ApprovalDomain,
+  DelegationRule,
+  DelegationScope
 } from '../types';
 import { getCostCenterBudget, commitCostCenterEncumbrance, branchPlants } from './organization';
 import { getInvoices, approveInvoiceForPayment, rejectInvoice } from './finance';
+import { recordAuditEvent } from './system';
 import { employees, getLeaveRequests, decideLeaveRequest } from './people';
 
 export const initialPurchaseRequests: PurchaseRequest[] = [
@@ -958,6 +962,138 @@ export function setReturnToVendorStatus(rtvId: string, status: RTVStatus): Retur
   return updated;
 }
 
+// ─── Issue #15: Approval Delegation, SLA Escalations & Timeouts ─────────────
+
+export const APPROVAL_SLA_HOURS = 48;
+
+export const initialDelegationRules: DelegationRule[] = [
+  // Nasrin Sultana (Head of Finance, Rahim Ahmed's manager) is travelling — her Finance approval
+  // authority is delegated to Rahim Ahmed for the week covering "today" in this demo calendar.
+  {
+    id: 'del-2026-0001',
+    originalApproverId: 'EMP-10410',
+    originalApproverName: 'Nasrin Sultana',
+    delegateeId: 'EMP-10241',
+    delegateeName: 'Rahim Ahmed',
+    startDate: '2026-09-20',
+    endDate: '2026-09-26',
+    scope: 'Finance',
+    reason: 'Regional CFO offsite — Singapore',
+    createdAt: '2026-09-18T09:00:00Z',
+    createdBy: 'Nasrin Sultana',
+    revoked: false
+  }
+];
+
+export let delegationRules: DelegationRule[] = [...initialDelegationRules];
+const delegationListeners: Array<() => void> = [];
+
+export function getDelegationRules(): DelegationRule[] {
+  return [...delegationRules];
+}
+
+export function subscribeDelegations(listener: () => void): () => void {
+  delegationListeners.push(listener);
+  return () => {
+    const idx = delegationListeners.indexOf(listener);
+    if (idx !== -1) delegationListeners.splice(idx, 1);
+  };
+}
+
+function notifyDelegations(): void {
+  delegationListeners.forEach((l) => l());
+}
+
+let nextDelegationSeq = 2;
+
+export function createDelegation(data: {
+  originalApproverId: string;
+  originalApproverName: string;
+  delegateeId: string;
+  delegateeName: string;
+  startDate: string;
+  endDate: string;
+  scope: DelegationScope;
+  reason?: string;
+  createdBy: string;
+}): DelegationRule {
+  if (data.delegateeName === data.originalApproverName) {
+    throw new Error('You cannot delegate to yourself.');
+  }
+  if (new Date(data.endDate) < new Date(data.startDate)) {
+    throw new Error('End date must be on or after the start date.');
+  }
+
+  const rule: DelegationRule = {
+    ...data,
+    id: `del-2026-${String(nextDelegationSeq++).padStart(4, '0')}`,
+    createdAt: new Date().toISOString(),
+    revoked: false
+  };
+  delegationRules = [rule, ...delegationRules];
+  notifyDelegations();
+  return rule;
+}
+
+export function revokeDelegation(delegationId: string): DelegationRule {
+  const rule = delegationRules.find((d) => d.id === delegationId);
+  if (!rule) throw new Error('Delegation rule not found.');
+  const updated: DelegationRule = { ...rule, revoked: true, revokedAt: new Date().toISOString() };
+  delegationRules = delegationRules.map((d) => (d.id === delegationId ? updated : d));
+  notifyDelegations();
+  return updated;
+}
+
+function isDelegationActive(rule: DelegationRule, atISODate: string): boolean {
+  if (rule.revoked) return false;
+  return atISODate >= rule.startDate && atISODate <= rule.endDate;
+}
+
+/** Finds the delegation (if any) currently covering `approverName`'s authority for `domain`. */
+export function getActiveDelegationFor(approverName: string, domain: ApprovalDomain, at: Date = new Date()): DelegationRule | undefined {
+  const atISODate = at.toISOString().slice(0, 10);
+  return delegationRules.find(
+    (d) => d.originalApproverName === approverName && (d.scope === 'all' || d.scope === domain) && isDelegationActive(d, atISODate)
+  );
+}
+
+/** Finds the delegation (if any) that makes `delegateeName` the acting approver for `domain`. */
+export function getActiveDelegationAsDelegatee(delegateeName: string, domain: ApprovalDomain, at: Date = new Date()): DelegationRule | undefined {
+  const atISODate = at.toISOString().slice(0, 10);
+  return delegationRules.find(
+    (d) => d.delegateeName === delegateeName && (d.scope === 'all' || d.scope === domain) && isDelegationActive(d, atISODate)
+  );
+}
+
+export interface SlaStatus {
+  hoursLeft: number;
+  breached: boolean;
+  label: string;
+  tone: 'neutral' | 'warning' | 'danger';
+}
+
+/** Shared by Approvals.tsx and ApprovalDetail.tsx so the countdown badge reads identically everywhere. */
+export function getSlaStatus(item: Pick<ApprovalItem, 'submittedAt' | 'slaHours' | 'escalated' | 'escalatedTo'>): SlaStatus {
+  const deadlineMs = new Date(item.submittedAt).getTime() + item.slaHours * 3600 * 1000;
+  const hoursLeft = (deadlineMs - Date.now()) / 3600 / 1000;
+
+  if (item.escalated) {
+    return { hoursLeft, breached: true, label: `Escalated → ${item.escalatedTo}`, tone: 'danger' };
+  }
+  if (hoursLeft <= 0) {
+    return { hoursLeft, breached: true, label: 'SLA breached', tone: 'danger' };
+  }
+  if (hoursLeft <= 12) {
+    return { hoursLeft, breached: false, label: `Expires in ${Math.ceil(hoursLeft)} hrs`, tone: 'danger' };
+  }
+  if (hoursLeft <= 24) {
+    return { hoursLeft, breached: false, label: `Expires in ${Math.ceil(hoursLeft)} hrs`, tone: 'warning' };
+  }
+  const days = Math.floor(hoursLeft / 24);
+  const hrs = Math.ceil(hoursLeft % 24);
+  return { hoursLeft, breached: false, label: `Expires in ${days}d ${hrs}h`, tone: 'neutral' };
+}
+
 // ─── Issue #13: Unified Multi-Domain Approval Inbox ──────────────────────────
 // Aggregates pending work from every domain store into one polymorphic list. Each ApprovalItem
 // is a thin read projection — decideApprovalItem() dispatches back to the real domain function
@@ -995,6 +1131,50 @@ function notifyApprovalInbox(): void {
   approvalInboxListeners.forEach((l) => l());
 }
 
+// Escalation state persists across getApprovalInbox() calls (keyed by ApprovalItem.id) so an
+// already-escalated item isn't re-escalated (and re-audited) on every refresh.
+const escalationStore: Record<string, { escalatedAt: string; escalatedTo: string }> = {};
+
+function resolveEscalationManager(requesterName: string): string {
+  return employees.find((e) => e.name === requesterName)?.manager || 'Group CEO';
+}
+
+/** Checks one item's SLA clock; on first breach, records the escalation (note + audit event) and
+ *  remembers it. Called as a pass over the fully-built inbox, since it needs `notes` filled in. */
+function withSlaEscalation(item: ApprovalItem): ApprovalItem {
+  const deadlineMs = new Date(item.submittedAt).getTime() + item.slaHours * 3600 * 1000;
+  const breached = Date.now() > deadlineMs;
+
+  if (breached && !escalationStore[item.id]) {
+    const escalatedTo = resolveEscalationManager(item.requester);
+    const now = new Date().toISOString();
+    escalationStore[item.id] = { escalatedAt: now, escalatedTo };
+    recordApprovalNote(item.type, item.sourceId, {
+      author: 'System',
+      at: now,
+      text: `SLA breached (${item.slaHours}h) — automatically escalated to ${escalatedTo}.`
+    });
+    recordAuditEvent({
+      user: 'System',
+      action: 'SLA_AUTO_ESCALATION',
+      resource: `${item.title} [${item.id}]`,
+      company: item.company,
+      before: 'Pending',
+      after: `Escalated to ${escalatedTo} after ${item.slaHours}h SLA breach`
+    });
+  }
+
+  const escalation = escalationStore[item.id];
+  if (!escalation) return item;
+  return {
+    ...item,
+    escalated: true,
+    escalatedAt: escalation.escalatedAt,
+    escalatedTo: escalation.escalatedTo,
+    notes: getApprovalNotesFor(item.type, item.sourceId)
+  };
+}
+
 export function getApprovalInbox(): ApprovalItem[] {
   const items: ApprovalItem[] = [];
 
@@ -1021,7 +1201,10 @@ export function getApprovalInbox(): ApprovalItem[] {
       stage: pr.stage,
       bulkEligible: !isBudgetOverride && pr.amount < BULK_APPROVAL_THRESHOLD,
       history: [{ label: 'Submitted', actor: pr.requester, state: 'done', time: pr.created }],
-      notes: getApprovalNotesFor(type, pr.id)
+      notes: getApprovalNotesFor(type, pr.id),
+      submittedAt: new Date(pr.created).toISOString(),
+      slaHours: APPROVAL_SLA_HOURS,
+      escalated: false
     });
   }
 
@@ -1049,7 +1232,10 @@ export function getApprovalInbox(): ApprovalItem[] {
           ? [{ label: `3-Way Match: ${inv.matchStatus || 'Unmatched'}`, actor: 'System', state: (isDiscrepancy ? 'rejected' : 'done') as ApprovalStep['state'], time: inv.issued }]
           : [])
       ],
-      notes: getApprovalNotesFor('supplier_invoice', inv.id)
+      notes: getApprovalNotesFor('supplier_invoice', inv.id),
+      submittedAt: new Date(inv.issued).toISOString(),
+      slaHours: APPROVAL_SLA_HOURS,
+      escalated: false
     });
   }
 
@@ -1071,7 +1257,10 @@ export function getApprovalInbox(): ApprovalItem[] {
       stage: 'Pending Approval — Purchase Order',
       bulkEligible: po.totalAmount < BULK_APPROVAL_THRESHOLD,
       history: po.statusHistory.map((h) => ({ label: h.status, actor: h.by, state: 'done' as const, time: h.at.slice(0, 10), note: h.note })),
-      notes: getApprovalNotesFor('payment_voucher', po.id)
+      notes: getApprovalNotesFor('payment_voucher', po.id),
+      submittedAt: po.createdAt,
+      slaHours: APPROVAL_SLA_HOURS,
+      escalated: false
     });
   }
 
@@ -1090,15 +1279,18 @@ export function getApprovalInbox(): ApprovalItem[] {
       department: emp?.department,
       priority: lv.days >= 7 ? 'High' : 'Normal',
       status: 'pending',
-      createdAt: lv.from,
+      createdAt: lv.submittedOn,
       stage: 'Awaiting manager approval',
       bulkEligible: true,
-      history: [{ label: 'Submitted', actor: lv.employee, state: 'done', time: lv.from }],
-      notes: getApprovalNotesFor('leave_application', lv.id)
+      history: [{ label: 'Submitted', actor: lv.employee, state: 'done', time: lv.submittedOn }],
+      notes: getApprovalNotesFor('leave_application', lv.id),
+      submittedAt: new Date(lv.submittedOn).toISOString(),
+      slaHours: APPROVAL_SLA_HOURS,
+      escalated: false
     });
   }
 
-  return items.sort((a, b) => PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority]);
+  return items.map(withSlaEscalation).sort((a, b) => PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority]);
 }
 
 export function decideApprovalItem(item: ApprovalItem, decision: 'approved' | 'rejected', by: string, comment?: string): void {
@@ -1123,9 +1315,29 @@ export function decideApprovalItem(item: ApprovalItem, decision: 'approved' | 'r
       throw new Error('This item type does not support decisions from the unified inbox yet.');
   }
 
-  if (comment && comment.trim()) {
-    recordApprovalNote(item.type, item.sourceId, { author: by, at: new Date().toISOString(), text: comment.trim(), decision });
+  // If the acting user is currently someone's active delegate for this domain, the audit trail
+  // must explicitly say so — this is the delegation half of Issue #15's acceptance criteria.
+  const delegation = getActiveDelegationAsDelegatee(by, item.domain);
+  const actingFor = delegation?.originalApproverName;
+
+  if ((comment && comment.trim()) || actingFor) {
+    recordApprovalNote(item.type, item.sourceId, {
+      author: by,
+      at: new Date().toISOString(),
+      text: comment?.trim() || `${decision === 'approved' ? 'Approved' : 'Rejected'} with no additional comment.`,
+      decision,
+      actingFor
+    });
   }
+
+  recordAuditEvent({
+    user: by,
+    action: decision === 'approved' ? 'APPROVE_UNIFIED_INBOX_ITEM' : 'REJECT_UNIFIED_INBOX_ITEM',
+    resource: `${item.title} [${item.id}]`,
+    company: item.company,
+    before: 'Pending',
+    after: actingFor ? `${decision} — acting on behalf of ${actingFor} (delegation ${delegation!.id})` : decision
+  });
 
   notifyApprovalInbox();
 }

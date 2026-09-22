@@ -607,6 +607,37 @@ export interface ApprovalItem {
   bulkEligible: boolean;
   history: ApprovalStep[];
   notes: ApprovalNote[];
+  /** ISO timestamp the item actually entered the pending queue — the SLA clock's zero point. */
+  submittedAt: string;
+  /** SLA window in hours before this item auto-escalates (48h per policy). */
+  slaHours: number;
+  escalated: boolean;
+  escalatedAt?: string;
+  /** Name of the approver's direct manager this was escalated to. */
+  escalatedTo?: string;
+}
+
+// ─── Issue #15: Approval Delegation, SLA Escalations & Timeouts ──────────────
+
+export type DelegationScope = 'all' | ApprovalDomain;
+
+export interface DelegationRule {
+  id: string;
+  originalApproverId: string;
+  originalApproverName: string;
+  delegateeId: string;
+  delegateeName: string;
+  /** ISO date (YYYY-MM-DD) — inclusive. */
+  startDate: string;
+  /** ISO date (YYYY-MM-DD) — inclusive. */
+  endDate: string;
+  scope: DelegationScope;
+  reason?: string;
+  createdAt: string;
+  createdBy: string;
+  /** Manually revoked before its natural end date. */
+  revoked: boolean;
+  revokedAt?: string;
 }
 
 // ─── Issue #14: Dynamic Conditional Workflow Routing Engine ──────────────────

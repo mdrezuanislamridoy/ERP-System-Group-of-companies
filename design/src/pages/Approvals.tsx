@@ -9,7 +9,11 @@ import {
   AlertTriangleIcon,
   BookOpenIcon,
   CheckIcon,
-  MessageSquareXIcon
+  MessageSquareXIcon,
+  ClockIcon,
+  UserCogIcon,
+  UndoIcon,
+  ShieldAlertIcon
 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/ui/Panel';
@@ -19,12 +23,23 @@ import { Badge } from '../components/ui/StatusBadge';
 import { StateBlock } from '../components/ui/States';
 import { ApprovalTimeline } from '../components/ApprovalTimeline';
 import { ApprovalDecisionModal } from '../components/ApprovalDecisionModal';
-import { getApprovalInbox, subscribeApprovalInbox, decideApprovalItem, decideApprovalItemsBulk } from '../data/operations';
+import { DelegationModal } from '../components/DelegationModal';
+import {
+  getApprovalInbox,
+  subscribeApprovalInbox,
+  decideApprovalItem,
+  decideApprovalItemsBulk,
+  getSlaStatus,
+  getDelegationRules,
+  subscribeDelegations,
+  revokeDelegation,
+  getActiveDelegationAsDelegatee
+} from '../data/operations';
 import { formatCurrency } from '../data/finance';
 import { group } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
 import { cn } from '../utils/cn';
-import type { ApprovalItem, ApprovalItemType } from '../types';
+import type { ApprovalItem, ApprovalItemType, DelegationRule } from '../types';
 
 const TYPE_META: Record<ApprovalItemType, { icon: React.ComponentType<{ className?: string }>; label: string }> = {
   purchase_request: { icon: ShoppingCartIcon, label: 'Purchase Request' },
@@ -42,7 +57,7 @@ const PRIORITY_TONE: Record<ApprovalItem['priority'], 'neutral' | 'warning' | 'd
   Critical: 'danger'
 };
 
-type TabId = 'all' | 'procurement' | 'hr' | 'finance';
+type TabId = 'all' | 'procurement' | 'hr' | 'finance' | 'delegated';
 
 export function Approvals() {
   const navigate = useNavigate();
@@ -53,15 +68,26 @@ export function Approvals() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [drawerItemId, setDrawerItemId] = useState<string | null>(null);
   const [decisionTarget, setDecisionTarget] = useState<{ items: ApprovalItem[]; decision: 'approved' | 'rejected' } | null>(null);
+  const [delegations, setDelegations] = useState<DelegationRule[]>(getDelegationRules());
+  const [isDelegationModalOpen, setIsDelegationModalOpen] = useState(false);
 
   useEffect(() => subscribeApprovalInbox(() => setItems(getApprovalInbox())), []);
+  useEffect(() => subscribeDelegations(() => setDelegations(getDelegationRules())), []);
 
-  const byDomain = useMemo(
+  // SLA countdowns and auto-escalation are time-based, not action-based — refresh periodically so
+  // badges tick down and newly-breaching items escalate without requiring a manual action first.
+  useEffect(() => {
+    const interval = setInterval(() => setItems(getApprovalInbox()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const byDomain = useMemo<Record<TabId, ApprovalItem[]>>(
     () => ({
       all: items,
       procurement: items.filter((i) => i.domain === 'Procurement'),
       hr: items.filter((i) => i.domain === 'HR'),
-      finance: items.filter((i) => i.domain === 'Finance')
+      finance: items.filter((i) => i.domain === 'Finance'),
+      delegated: []
     }),
     [items]
   );
@@ -115,7 +141,11 @@ export function Approvals() {
     return outcome;
   };
 
-  const breachingSla = items.filter((i) => i.priority === 'Critical' || i.priority === 'High').length;
+  const breachingSla = items.filter((i) => getSlaStatus(i).breached).length;
+  const activeDelegationAsDelegate = getActiveDelegationAsDelegatee(role.user || '', 'Procurement') ||
+    getActiveDelegationAsDelegatee(role.user || '', 'Finance') ||
+    getActiveDelegationAsDelegatee(role.user || '', 'HR') ||
+    getActiveDelegationAsDelegatee(role.user || '', 'Operations');
 
   return (
     <div className="pb-10">
@@ -126,10 +156,20 @@ export function Approvals() {
         meta={
         <>
             <Badge tone="accent">{role.title}</Badge>
-            {breachingSla > 0 && <Badge tone="danger">{breachingSla} high priority</Badge>}
+            {breachingSla > 0 && <Badge tone="danger">{breachingSla} breaching SLA</Badge>}
           </>
         } />
 
+      {activeDelegationAsDelegate && (
+        <div className="mx-6 mt-4 flex items-center gap-2.5 rounded-lg border border-warning/30 bg-warning-soft px-4 py-2.5 text-xs font-medium text-warning shadow-sm">
+          <ShieldAlertIcon className="h-4 w-4 shrink-0" />
+          <span>
+            You are currently covering {activeDelegationAsDelegate.scope === 'all' ? 'all approvals' : `${activeDelegationAsDelegate.scope} approvals`} for{' '}
+            <strong>{activeDelegationAsDelegate.originalApproverName}</strong> until {activeDelegationAsDelegate.endDate}. Decisions you make in scope
+            will be logged as acting on their behalf.
+          </span>
+        </div>
+      )}
 
       <div className="px-6">
         <Tabs
@@ -137,7 +177,8 @@ export function Approvals() {
           { id: 'all', label: 'All Pending', count: byDomain.all.length },
           { id: 'procurement', label: 'Procurement', count: byDomain.procurement.length },
           { id: 'hr', label: 'HR & Leaves', count: byDomain.hr.length },
-          { id: 'finance', label: 'Finance & Payments', count: byDomain.finance.length }]
+          { id: 'finance', label: 'Finance & Payments', count: byDomain.finance.length },
+          { id: 'delegated', label: 'Delegated', count: delegations.filter((d) => !d.revoked).length }]
           }
           active={tab}
           onChange={(id) => {
@@ -147,6 +188,66 @@ export function Approvals() {
 
       </div>
 
+      {tab === 'delegated' ? (
+        <div className="p-6">
+          <Panel
+            title="Approval Delegations"
+            description="Temporary hand-offs of your approval authority, and delegations covering you"
+            actions={
+              <Button size="xs" variant="primary" icon={UserCogIcon} onClick={() => setIsDelegationModalOpen(true)}>
+                Set up delegation
+              </Button>
+            }
+            bodyClassName="p-0"
+          >
+            {delegations.length === 0 ? (
+              <StateBlock
+                title="Nothing delegated"
+                description="When you delegate approval authority — for leave or travel — the delegated items appear here."
+                primary={{ label: 'Set up delegation', onClick: () => setIsDelegationModalOpen(true) }}
+              />
+            ) : (
+              <ul className="divide-y divide-line">
+                {delegations.map((d) => {
+                  const isMine = d.originalApproverName === role.user;
+                  const coversMe = d.delegateeName === role.user;
+                  const isActiveNow = !d.revoked && d.startDate <= new Date().toISOString().slice(0, 10) && d.endDate >= new Date().toISOString().slice(0, 10);
+                  return (
+                    <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-ink">
+                            {d.originalApproverName} <ClockIcon className="inline h-3 w-3 mx-0.5 text-faint" /> {d.delegateeName}
+                          </span>
+                          <Badge tone="neutral">{d.scope === 'all' ? 'All domains' : d.scope}</Badge>
+                          {d.revoked ? (
+                            <Badge tone="neutral">Revoked</Badge>
+                          ) : isActiveNow ? (
+                            <Badge tone="success">Active</Badge>
+                          ) : (
+                            <Badge tone="warning">{d.startDate > new Date().toISOString().slice(0, 10) ? 'Upcoming' : 'Expired'}</Badge>
+                          )}
+                          {isMine && <Badge tone="accent">Set by you</Badge>}
+                          {coversMe && <Badge tone="accent">You cover this</Badge>}
+                        </div>
+                        <p className="text-xs text-muted mt-0.5">
+                          {d.startDate} → {d.endDate}
+                          {d.reason ? ` · ${d.reason}` : ''}
+                        </p>
+                      </div>
+                      {isMine && !d.revoked && (
+                        <Button size="xs" variant="ghost" icon={UndoIcon} onClick={() => revokeDelegation(d.id)}>
+                          Revoke
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Panel>
+        </div>
+      ) : (
       <div className="p-6 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -185,7 +286,7 @@ export function Approvals() {
             <StateBlock
               title="Nothing pending"
               description="Nothing in this view is waiting on a decision right now."
-              primary={{ label: 'Set up delegation', onClick: () => navigate('/profile') }}
+              primary={{ label: 'Set up delegation', onClick: () => setIsDelegationModalOpen(true) }}
             />
           </div>
         ) : (
@@ -238,6 +339,14 @@ export function Approvals() {
                         <span className="flex items-center gap-2 flex-wrap">
                           <Badge tone="neutral">{meta.label}</Badge>
                           <Badge tone={PRIORITY_TONE[item.priority]}>{item.priority}</Badge>
+                          {(() => {
+                            const sla = getSlaStatus(item);
+                            return (
+                              <Badge tone={sla.tone} className="inline-flex items-center gap-1">
+                                <ClockIcon className="h-3 w-3" /> {sla.label}
+                              </Badge>
+                            );
+                          })()}
                         </span>
                         <span className="mt-1 block truncate text-md font-medium text-ink">{item.title}</span>
                         <span className="block text-sm text-muted">
@@ -271,6 +380,7 @@ export function Approvals() {
           </>
         )}
       </div>
+      )}
 
       {/* Inline detail drawer */}
       {drawerItem && (
@@ -298,6 +408,31 @@ export function Approvals() {
                 <XIcon className="h-5 w-5" />
               </button>
             </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {(() => {
+                const sla = getSlaStatus(drawerItem);
+                return (
+                  <Badge tone={sla.tone} className="inline-flex items-center gap-1">
+                    <ClockIcon className="h-3 w-3" /> {sla.label}
+                  </Badge>
+                );
+              })()}
+              {(drawerItem.type === 'purchase_request' || drawerItem.type === 'budget_override') && (
+                <Button size="xs" variant="ghost" onClick={() => navigate(`/approvals/${drawerItem.sourceId}`)}>
+                  Open full page →
+                </Button>
+              )}
+            </div>
+
+            {drawerItem.notes.some((n) => n.actingFor) && (
+              <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-warning/40 bg-warning-soft/30 p-3.5">
+                <ShieldAlertIcon className="h-4 w-4 shrink-0 text-warning mt-0.5" />
+                <p className="text-xs text-ink">
+                  A decision on this item was made by a delegate acting on behalf of another approver — see the note below.
+                </p>
+              </div>
+            )}
 
             <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-line bg-subtle/70 p-3.5">
               <div>
@@ -345,11 +480,14 @@ export function Approvals() {
                         <span className="text-sm font-medium text-ink">{n.author}</span>
                         <span className="text-xs text-faint">{n.at.slice(0, 10)}</span>
                       </div>
-                      {n.decision && (
-                        <Badge tone={n.decision === 'approved' ? 'success' : 'danger'} className="mt-1">
-                          {n.decision}
-                        </Badge>
-                      )}
+                      <div className="mt-1 flex items-center gap-1.5">
+                        {n.decision && (
+                          <Badge tone={n.decision === 'approved' ? 'success' : 'danger'}>
+                            {n.decision}
+                          </Badge>
+                        )}
+                        {n.actingFor && <Badge tone="warning">Acting for {n.actingFor}</Badge>}
+                      </div>
                       <p className="mt-1 text-sm text-muted">{n.text}</p>
                     </div>
                   ))}
@@ -377,6 +515,12 @@ export function Approvals() {
         decision={decisionTarget?.decision || null}
         onClose={() => setDecisionTarget(null)}
         onSubmit={submitDecision}
+      />
+
+      <DelegationModal
+        isOpen={isDelegationModalOpen}
+        onClose={() => setIsDelegationModalOpen(false)}
+        onSuccess={() => setDelegations(getDelegationRules())}
       />
     </div>);
 
