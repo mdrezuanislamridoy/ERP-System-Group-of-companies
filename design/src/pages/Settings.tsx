@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BuildingIcon,
   CheckIcon,
@@ -15,17 +15,27 @@ import {
   BriefcaseIcon,
   WrenchIcon,
   CheckCircle2Icon,
-  SlidersHorizontalIcon
+  SlidersHorizontalIcon,
+  LockIcon,
+  LockKeyholeOpenIcon
 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/ui/Panel';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/StatusBadge';
 import { companies, group } from '../data/organization';
+import { getFiscalPeriods, subscribeFiscalPeriods, setFiscalPeriodStatus } from '../data/finance';
+import { recordAuditEvent } from '../data/system';
 import { useApp } from '../contexts/AppContext';
 import { useEntityScope } from '../contexts/EntityScopeContext';
-import { type ModuleKey, MODULE_METADATA } from '../types';
+import { type ModuleKey, type FiscalPeriodStatus, MODULE_METADATA } from '../types';
 import { cn } from '../utils/cn';
+
+const PERIOD_STATUS_META: Record<FiscalPeriodStatus, { label: string; tone: 'success' | 'warning' | 'danger' }> = {
+  open: { label: 'Open', tone: 'success' },
+  'soft-closed': { label: 'Soft Closed', tone: 'warning' },
+  'hard-closed': { label: 'Hard Closed', tone: 'danger' }
+};
 
 const GROUPS = [
   { label: 'Organization', items: ['Organization', 'Companies', 'Branches', 'Departments'] },
@@ -80,11 +90,34 @@ const PRESETS: Record<string, { label: string; modules: ModuleKey[]; hint: strin
 };
 
 export function Settings() {
-  const { companyName, can } = useApp();
+  const { companyName, can, role } = useApp();
   const { activeCompanyId, companyModules, toggleCompanyModule, setCompanyModulesPreset } = useEntityScope();
   const [section, setSection] = useState('Modules');
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(activeCompanyId || companies[0].id);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [fiscalPeriods, setFiscalPeriods] = useState(getFiscalPeriods());
+
+  useEffect(() => subscribeFiscalPeriods(() => setFiscalPeriods(getFiscalPeriods())), []);
+
+  const handlePeriodStatusChange = (periodId: string, status: FiscalPeriodStatus) => {
+    if (!can('finance.approve')) return;
+    const period = fiscalPeriods.find((p) => p.id === periodId);
+    if (!period) return;
+
+    const updated = setFiscalPeriodStatus(periodId, status, role.user || 'Group Financial Controller');
+
+    recordAuditEvent({
+      user: role.user || 'Group Financial Controller',
+      action: 'SET_FISCAL_PERIOD_STATUS',
+      resource: updated.label,
+      company: 'ABC GROUP',
+      before: `${period.label}: ${PERIOD_STATUS_META[period.status].label}`,
+      after: `${updated.label}: ${PERIOD_STATUS_META[updated.status].label}`
+    });
+
+    setStatusMsg(`${updated.label} set to '${PERIOD_STATUS_META[updated.status].label}'`);
+    setTimeout(() => setStatusMsg(null), 3500);
+  };
 
   const targetCompany = companies.find((c) => c.id === selectedCompanyId) || companies[0];
   const activeModules = companyModules[targetCompany.id] || targetCompany.enabledModules;
@@ -280,6 +313,67 @@ export function Settings() {
                       </li>
                     );
                   })}
+                </ul>
+              </Panel>
+            </div>
+          ) : section === 'Finance' ? (
+            <div className="space-y-4">
+              <Panel
+                title="Fiscal Period Closing"
+                description="Lock monthly periods to prevent unauthorized retro-active ledger tampering. Closed periods reject new journal postings."
+                bodyClassName="p-0"
+              >
+                <ul className="divide-y divide-line">
+                  {fiscalPeriods.map((period) => {
+                    const meta = PERIOD_STATUS_META[period.status];
+                    return (
+                      <li key={period.id} className="flex flex-wrap items-center gap-3.5 px-4 py-3">
+                        <div
+                          className={cn(
+                            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border',
+                            period.status === 'open'
+                              ? 'border-line bg-canvas text-faint'
+                              : 'border-danger/30 bg-danger-soft text-danger'
+                          )}
+                        >
+                          {period.status === 'open' ? <LockKeyholeOpenIcon className="h-4 w-4" /> : <LockIcon className="h-4 w-4" />}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-ink">{period.label}</p>
+                            <Badge tone={meta.tone}>{meta.label}</Badge>
+                          </div>
+                          {period.closedBy ? (
+                            <p className="text-xs text-muted mt-0.5">
+                              Closed by {period.closedBy} · {period.closedAt}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted mt-0.5">Open for standard, adjusting and closing postings.</p>
+                          )}
+                        </div>
+
+                        <select
+                          value={period.status}
+                          onChange={(e) => handlePeriodStatusChange(period.id, e.target.value as FiscalPeriodStatus)}
+                          disabled={!can('finance.approve')}
+                          className="h-8 rounded border border-line bg-canvas px-2.5 text-xs font-medium text-ink focus:border-accent focus:outline-none disabled:opacity-50"
+                        >
+                          <option value="open">Open</option>
+                          <option value="soft-closed">Soft Closed</option>
+                          <option value="hard-closed">Hard Closed</option>
+                        </select>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Panel>
+
+              <Panel title="What each state means" bodyClassName="p-4">
+                <ul className="space-y-2 text-xs text-muted">
+                  <li><strong className="text-ink">Open</strong> — any voucher type may post.</li>
+                  <li><strong className="text-ink">Soft Closed</strong> — only Adjusting, Period Closing or Reversing entries may post; standard activity is rejected.</li>
+                  <li><strong className="text-ink">Hard Closed</strong> — no postings of any kind are accepted, including reversals.</li>
                 </ul>
               </Panel>
             </div>

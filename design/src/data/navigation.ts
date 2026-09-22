@@ -71,7 +71,8 @@ export const navigation: NavSection[] = [
     module: 'finance',
     children: [
     { label: 'Overview', to: '/finance' },
-    { label: 'Chart of Accounts', to: '/finance/accounts' }]
+    { label: 'Chart of Accounts', to: '/finance/accounts' },
+    { label: 'Bank Reconciliation', to: '/finance/bank-reconciliation' }]
 
   },
   { label: 'Invoices', to: '/finance/invoices', icon: ReceiptIcon, permission: 'invoice.read', module: 'finance' },

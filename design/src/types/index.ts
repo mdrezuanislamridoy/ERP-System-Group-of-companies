@@ -108,6 +108,33 @@ export interface JournalEntry {
   createdBy: string;
   createdAt: string;
   postedAt: string;
+  /** Immutability flag — once true, this voucher can never be edited or deleted, only reversed. */
+  isPosted: boolean;
+  /** ISO timestamp the voucher became immutable. Set at the same moment it was posted. */
+  lockedAt: string;
+  /** Set on the ORIGINAL voucher once it has been reversed. */
+  reversedByEntryId?: string;
+  reversedByEntryNumber?: string;
+  /** Set on the REVERSAL voucher, pointing back at the entry it compensates for. */
+  reversalOfEntryId?: string;
+  reversalOfEntryNumber?: string;
+  /** Mandatory audit justification captured when a reversal is posted. */
+  reversalReason?: string;
+}
+
+// ─── Issue #06: Fiscal Period Closing ─────────────────────────────────────────
+
+export type FiscalPeriodStatus = 'open' | 'soft-closed' | 'hard-closed';
+
+export interface FiscalPeriod {
+  id: string;
+  label: string;
+  year: number;
+  /** 1–12 */
+  month: number;
+  status: FiscalPeriodStatus;
+  closedBy?: string;
+  closedAt?: string;
 }
 
 export interface GeneralLedgerPosting {
@@ -141,6 +168,74 @@ export interface TrialBalanceRow {
   netCredit: number;
 }
 
+// ─── Issue #08: Bank Reconciliation & Sub-Ledger Integration ─────────────────
+
+/** From the BANK's point of view: 'credit' = money in, 'debit' = money out. */
+export type BankTransactionDirection = 'credit' | 'debit';
+export type BankTransactionStatus = 'unmatched' | 'matched';
+export type BankMatchType = 'auto' | 'manual' | 'adjustment';
+
+export interface BankTransaction {
+  id: string;
+  statementId: string;
+  date: string;
+  description: string;
+  reference: string;
+  amount: number;
+  direction: BankTransactionDirection;
+  status: BankTransactionStatus;
+  matchedJournalEntryId?: string;
+  matchedJournalEntryNumber?: string;
+  /** Stable key `${journalEntryId}::${journalLineId}` identifying the exact GL line this is matched to. */
+  matchedLineKey?: string;
+  matchType?: BankMatchType;
+  matchedAt?: string;
+  matchedBy?: string;
+}
+
+export interface BankStatement {
+  id: string;
+  companyId: string;
+  companyName: string;
+  bankName: string;
+  accountNumberMasked: string;
+  /** GL account this statement reconciles against, e.g. '1110' Cash & Cash Equivalents. */
+  glAccountCode: string;
+  periodLabel: string;
+  openingBalance: number;
+  /** Balance as reported by the bank — the "Statement Balance". */
+  closingBalance: number;
+  importedAt: string;
+  importedBy: string;
+  transactions: BankTransaction[];
+}
+
+/** A GL posting to the reconciled account, read directly off journalVouchers (not the display-oriented
+ *  GeneralLedgerPosting, whose `id` shifts as new entries are added) — keyed stably for persistent matching. */
+export interface ReconcilableLedgerLine {
+  key: string;
+  journalEntryId: string;
+  journalEntryNumber: string;
+  lineId: string;
+  date: string;
+  description: string;
+  reference: string;
+  debit: number;
+  credit: number;
+  companyId: string;
+  companyName: string;
+}
+
+export interface BankReconciliationSummary {
+  statementBalance: number;
+  ledgerBalance: number;
+  reconciledBalance: number;
+  unmatchedDifference: number;
+  matchedCount: number;
+  unmatchedStatementCount: number;
+  unmatchedLedgerCount: number;
+}
+
 export interface PurchaseRequest {
   id: string;
   title: string;
@@ -152,6 +247,157 @@ export interface PurchaseRequest {
   stage: string;
   status: StatusKey;
   priority: 'Low' | 'Normal' | 'High' | 'Critical';
+  /** Cost Center this request draws against — undefined for legacy/unbudgeted requests. */
+  costCenterId?: string;
+  costCenterCode?: string;
+  /** Set true when `amount` exceeded the Cost Center's available headroom at submission time. */
+  budgetOverrun?: boolean;
+  /** How much `amount` exceeded available headroom by, when budgetOverrun is true. */
+  overrunAmount?: number;
+  /** Overrun requests are routed to an executive variance sign-off tier before a PO can be generated. */
+  escalationRequired?: boolean;
+  escalationApprovedBy?: string;
+}
+
+// ─── Issue #07: Cost Center Budget Variance Control ──────────────────────────
+// The Budget model itself lives as annualBudget/consumedBudget/encumberedBudget
+// fields directly on CostCenter (below) — this is the computed read-model used
+// to render live headroom in the UI. Single-fiscal-year prototype: `fiscalYear`
+// is informational only, sourced from the group's active calendar.
+
+export interface CostCenterBudgetSnapshot {
+  costCenterId: string;
+  costCenterCode: string;
+  costCenterName: string;
+  fiscalYear: number;
+  allocatedAmount: number;
+  consumedAmount: number;
+  encumberedAmount: number;
+  /** allocatedAmount - (consumedAmount + encumberedAmount); may be negative once over budget. */
+  availableAmount: number;
+  utilizationPct: number;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  category: string;
+  spend: number;
+  orders: number;
+  rating: number;
+}
+
+// ─── Issue #09: RFQ & Supplier Quotation Comparison Matrix ───────────────────
+
+export interface RFQItem {
+  id: string;
+  product: string;
+  sku: string;
+  qty: number;
+  unit: string;
+  specification?: string;
+}
+
+export interface QuoteItem {
+  rfqItemId: string;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export type RFQStatus = 'draft' | 'open' | 'closed' | 'awarded' | 'cancelled';
+export type SupplierQuoteStatus = 'submitted' | 'selected' | 'rejected';
+
+export interface SupplierQuote {
+  id: string;
+  rfqId: string;
+  supplierName: string;
+  submittedAt: string;
+  items: QuoteItem[];
+  totalAmount: number;
+  deliveryDays: number;
+  warrantyMonths: number;
+  paymentTerms: string;
+  status: SupplierQuoteStatus;
+}
+
+export interface RFQ {
+  id: string;
+  rfqNumber: string;
+  title: string;
+  purchaseRequestId: string;
+  companyId: string;
+  companyName: string;
+  department: string;
+  issuedDate: string;
+  dueDate: string;
+  status: RFQStatus;
+  items: RFQItem[];
+  invitedSuppliers: string[];
+  quotes: SupplierQuote[];
+  winningSupplierName?: string;
+  winningQuoteId?: string;
+  awardedAt?: string;
+  awardedBy?: string;
+  generatedPurchaseOrderId?: string;
+  createdBy: string;
+}
+
+// ─── Issue #10: Formal Purchase Order (PO) Lifecycle Management ──────────────
+// A PurchaseOrder is a distinct, legally-binding external document — never to be
+// confused with the internal PurchaseRequest that authorized it. It may be
+// generated from an awarded RFQ (carrying the winning quote's prices forward)
+// or raised directly against an approved Purchase Requisition.
+
+export type POStatus = 'Draft' | 'Pending Approval' | 'Issued' | 'Partially Received' | 'Completed' | 'Cancelled';
+
+export interface POLine {
+  id: string;
+  rfqItemId?: string;
+  sku: string;
+  description: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  taxRatePct: number;
+  taxAmount: number;
+  /** qty * unitPrice + taxAmount */
+  lineTotal: number;
+  /** Cumulative quantity received against this line so far — drives Partially Received / Completed. */
+  qtyReceived: number;
+}
+
+export interface POStatusEvent {
+  status: POStatus;
+  at: string;
+  by: string;
+  note?: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  poNumber: string;
+  rfqId?: string;
+  purchaseRequestId?: string;
+  supplierId: string;
+  supplierName: string;
+  companyId: string;
+  companyName: string;
+  deliveryAddress: string;
+  lines: POLine[];
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  paymentTerms: string;
+  deliveryDays?: number;
+  warrantyMonths?: number;
+  status: POStatus;
+  statusHistory: POStatusEvent[];
+  createdAt: string;
+  createdBy: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  issuedAt?: string;
+  closedAt?: string;
 }
 
 export interface StockItem {
@@ -165,6 +411,70 @@ export interface StockItem {
   reorder: number;
   value: number;
   status: StatusKey;
+  /** Received but failed QC — held pending Return-to-Vendor, excluded from Available. */
+  quarantineQty: number;
+}
+
+// ─── Issue #11: Goods Receipt Note (GRN) & QC Inspection ─────────────────────
+// A GRN records physical arrival against an issued PO; each line carries its own
+// QCInspection verdict. Only `acceptedQty` ever reaches Available stock — `rejectedQty`
+// is quarantined and automatically raises a Return-to-Vendor ticket.
+
+export interface QCInspection {
+  inspectorName: string;
+  inspectedAt: string;
+  receivedQty: number;
+  acceptedQty: number;
+  rejectedQty: number;
+  rejectionReason?: string;
+  batchNumber?: string;
+}
+
+export interface GRNLine {
+  id: string;
+  poLineId: string;
+  sku: string;
+  description: string;
+  unit: string;
+  qc: QCInspection;
+}
+
+export interface GoodsReceiptNote {
+  id: string;
+  grnNumber: string;
+  poId: string;
+  poNumber: string;
+  supplierId: string;
+  supplierName: string;
+  companyId: string;
+  companyName: string;
+  warehouse: string;
+  lines: GRNLine[];
+  receivedAt: string;
+  receivedBy: string;
+}
+
+export type RTVStatus = 'open' | 'shipped-back' | 'resolved' | 'cancelled';
+
+export interface ReturnToVendorTicket {
+  id: string;
+  rtvNumber: string;
+  grnId: string;
+  poId: string;
+  poNumber: string;
+  supplierId: string;
+  supplierName: string;
+  companyId: string;
+  companyName: string;
+  sku: string;
+  description: string;
+  rejectedQty: number;
+  unit: string;
+  rejectionReason: string;
+  batchNumber?: string;
+  status: RTVStatus;
+  createdAt: string;
+  createdBy: string;
 }
 
 export interface AuditEvent {

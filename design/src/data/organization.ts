@@ -9,6 +9,7 @@ import type {
   Department,
   CostCenter,
   ProfitCenter,
+  CostCenterBudgetSnapshot,
 } from '../types';
 
 // ─── Legacy alias (keeps existing Company-typed imports working) ───────────────
@@ -260,7 +261,76 @@ export const costCenters: CostCenter[] = [
   // ABC Pharma
   { id: 'cc-pharma-prod-001',companyId: 'le-pharma', departmentId: 'd-pharma-qa', branchId: 'bp-pharma-plant', code: 'CC-PHARMA-PROD-001', name: 'GMP Manufacturing — Solid Dosage', type: 'production',     manager: 'Dr. Rafiqul Alam', annualBudget: 8500000,  consumedBudget: 5200000, encumberedBudget: 900000,  status: 'active' },
   { id: 'cc-pharma-rd-001',  companyId: 'le-pharma', departmentId: 'd-pharma-rd', branchId: 'bp-pharma-hq',   code: 'CC-PHARMA-RD-001',  name: 'R&D — Drug Discovery',              type: 'operating',      manager: 'Dr. Sumon Roy',    annualBudget: 5000000,  consumedBudget: 2800000, encumberedBudget: 600000,  status: 'active' },
+  // ABC Grocery
+  { id: 'cc-groc-retail-001',companyId: 'le-grocery', branchId: 'bp-groc-wh',   code: 'CC-GROC-RETAIL-001',name: 'Retail Operations — Store Replenishment', type: 'operating',  manager: 'Shirin Akter',    annualBudget: 6000000,  consumedBudget: 4100000, encumberedBudget: 900000,  status: 'active' },
+  { id: 'cc-groc-ecom-001',  companyId: 'le-grocery', branchId: 'bp-groc-hq',   code: 'CC-GROC-ECOM-001',  name: 'E-Commerce — Fulfillment',          type: 'operating',      manager: 'Taslima Khan',     annualBudget: 2500000,  consumedBudget: 1450000, encumberedBudget: 300000,  status: 'active' },
+  // ABC Textiles — deliberately tight headroom on the weaving mill for demoing budget overrun
+  { id: 'cc-tex-mill-001',   companyId: 'le-textile', branchId: 'bp-tex-mill-1',code: 'CC-TEX-MILL-001',   name: 'Production — Weaving Mill',         type: 'production',     manager: 'Anwar Sadiq',      annualBudget: 9000000,  consumedBudget: 8100000, encumberedBudget: 700000,  status: 'active' },
+  { id: 'cc-tex-mill-002',   companyId: 'le-textile', branchId: 'bp-tex-mill-2',code: 'CC-TEX-MILL-002',   name: 'Production — Knitting Factory',     type: 'production',     manager: 'Dilruba Begum',    annualBudget: 7000000,  consumedBudget: 5200000, encumberedBudget: 1200000, status: 'active' },
 ];
+
+// ─── Issue #07: Cost Center Budget Variance Control Engine ───────────────────
+// Encumbrance accounting: submitting a Purchase Request immediately reserves its
+// amount against the Cost Center (committed in pending POs) without touching the
+// seed consumedBudget figures. Held as a delta overlay so the base seed data
+// above stays a readable snapshot of "budget as of period start".
+
+const GROUP_FISCAL_YEAR = 2026;
+
+let runtimeEncumbranceDelta: Record<string, number> = {};
+const costCenterBudgetListeners: Array<() => void> = [];
+
+export function subscribeCostCenterBudgets(listener: () => void): () => void {
+  costCenterBudgetListeners.push(listener);
+  return () => {
+    const idx = costCenterBudgetListeners.indexOf(listener);
+    if (idx !== -1) costCenterBudgetListeners.splice(idx, 1);
+  };
+}
+
+/** Reserve (or, with a negative amount, release) budget against a Cost Center. */
+export function commitCostCenterEncumbrance(costCenterId: string, amount: number): void {
+  runtimeEncumbranceDelta[costCenterId] = (runtimeEncumbranceDelta[costCenterId] || 0) + amount;
+  costCenterBudgetListeners.forEach((l) => l());
+}
+
+/** Cost centers with encumberedBudget reflecting live, in-flight Purchase Request commitments. */
+export function getLiveCostCenters(): CostCenter[] {
+  return costCenters.map((cc) => ({
+    ...cc,
+    encumberedBudget: cc.encumberedBudget + (runtimeEncumbranceDelta[cc.id] || 0)
+  }));
+}
+
+export function getCostCenterBudget(costCenterId: string): CostCenterBudgetSnapshot | undefined {
+  const cc = costCenters.find((c) => c.id === costCenterId);
+  if (!cc) return undefined;
+
+  const encumberedAmount = cc.encumberedBudget + (runtimeEncumbranceDelta[cc.id] || 0);
+  const availableAmount = cc.annualBudget - (cc.consumedBudget + encumberedAmount);
+  const utilizationPct = cc.annualBudget > 0 ? ((cc.consumedBudget + encumberedAmount) / cc.annualBudget) * 100 : 0;
+
+  return {
+    costCenterId: cc.id,
+    costCenterCode: cc.code,
+    costCenterName: cc.name,
+    fiscalYear: GROUP_FISCAL_YEAR,
+    allocatedAmount: cc.annualBudget,
+    consumedAmount: cc.consumedBudget,
+    encumberedAmount,
+    availableAmount,
+    utilizationPct
+  };
+}
+
+export function getAllCostCenterBudgets(companyId?: string | null): CostCenterBudgetSnapshot[] {
+  const scoped = companyId && companyId !== '*' && companyId !== 'all'
+    ? costCenters.filter((cc) => cc.companyId === companyId || cc.companyId === companyId.replace(/^c-/, 'le-') || cc.companyId === companyId.replace(/^le-/, 'c-'))
+    : costCenters;
+  return scoped
+    .map((cc) => getCostCenterBudget(cc.id))
+    .filter((b): b is CostCenterBudgetSnapshot => Boolean(b));
+}
 
 // ─── Level 5: Profit Centers ──────────────────────────────────────────────────
 

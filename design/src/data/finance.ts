@@ -5,7 +5,12 @@ import type {
   JournalLineItem,
   GeneralLedgerPosting,
   TrialBalanceRow,
-  AccountType
+  AccountType,
+  FiscalPeriod,
+  FiscalPeriodStatus,
+  BankStatement,
+  ReconcilableLedgerLine,
+  BankReconciliationSummary
 } from '../types';
 
 export const groupKpis = [
@@ -99,6 +104,7 @@ export const initialChartOfAccounts: ChartAccount[] = [
   { code: '4110', name: 'Sales Revenue — FMCG & Foods', level: 2, type: 'Revenue', openingBalance: 1480000000, parentCode: '4100', normalBalance: 'credit' },
   { code: '4120', name: 'Freight & Logistics Revenue', level: 2, type: 'Revenue', openingBalance: 580000000, parentCode: '4100', normalBalance: 'credit' },
   { code: '4130', name: 'IT & Software License Revenue', level: 2, type: 'Revenue', openingBalance: 390000000, parentCode: '4100', normalBalance: 'credit' },
+  { code: '4140', name: 'Interest Income', level: 2, type: 'Revenue', openingBalance: 0, parentCode: '4100', normalBalance: 'credit' },
 
   // 5000 COST OF GOODS SOLD
   { code: '5000', name: 'Cost of Goods Sold', level: 0, type: 'Expense', openingBalance: 1420000000, normalBalance: 'debit' },
@@ -112,6 +118,7 @@ export const initialChartOfAccounts: ChartAccount[] = [
   { code: '6100', name: 'Administrative Expenses', level: 1, type: 'Expense', openingBalance: 240000000, parentCode: '6000', normalBalance: 'debit' },
   { code: '6110', name: 'Salaries & Staff Benefits', level: 2, type: 'Expense', openingBalance: 180000000, parentCode: '6100', normalBalance: 'debit' },
   { code: '6120', name: 'Office Rent & Facilities', level: 2, type: 'Expense', openingBalance: 60000000, parentCode: '6100', normalBalance: 'debit' },
+  { code: '6130', name: 'Bank Charges & Fees', level: 2, type: 'Expense', openingBalance: 0, parentCode: '6100', normalBalance: 'debit' },
   { code: '6200', name: 'Selling & Distribution', level: 1, type: 'Expense', openingBalance: 160000000, parentCode: '6000', normalBalance: 'debit' },
   { code: '6210', name: 'Fleet Fuel & Maintenance', level: 2, type: 'Expense', openingBalance: 110000000, parentCode: '6200', normalBalance: 'debit' },
   { code: '6220', name: 'Marketing & Distribution Promotion', level: 2, type: 'Expense', openingBalance: 50000000, parentCode: '6200', normalBalance: 'debit' }
@@ -121,7 +128,7 @@ export const chartOfAccounts = initialChartOfAccounts;
 
 // ─── Initial Seeded Journal Entries ──────────────────────────────────────────
 
-export const initialJournalEntries: JournalEntry[] = [
+const seededJournalEntries: Array<Omit<JournalEntry, 'isPosted' | 'lockedAt'>> = [
   {
     id: 'jv-2026-0001',
     entryNumber: 'JV-2026-0001',
@@ -359,8 +366,92 @@ export const initialJournalEntries: JournalEntry[] = [
     createdBy: 'Rumana Haque',
     createdAt: '2026-09-15T15:30:00Z',
     postedAt: '2026-09-15T15:30:00Z'
+  },
+  {
+    id: 'jv-2026-0007',
+    entryNumber: 'JV-2026-0007',
+    date: '2026-09-18',
+    companyId: 'c-foods',
+    companyName: 'ABC Foods Ltd.',
+    reference: 'INV-2026-001830',
+    type: 'standard',
+    status: 'posted',
+    memo: 'Customer settlement collected — Shwapno Superstore retail account',
+    lines: [
+      {
+        id: 'jl-14',
+        accountCode: '1110',
+        accountName: 'Cash & Cash Equivalents',
+        costCenterId: 'cc-foods-fin-002',
+        costCenterCode: 'CC-FOODS-FIN-002',
+        debit: 8860000,
+        credit: 0,
+        description: 'Inward RTGS receipt from Shwapno Superstore'
+      },
+      {
+        id: 'jl-15',
+        accountCode: '1120',
+        accountName: 'Accounts Receivable (Trade)',
+        costCenterId: 'cc-foods-fin-002',
+        costCenterCode: 'CC-FOODS-FIN-002',
+        debit: 0,
+        credit: 8860000,
+        description: 'Clearance of Shwapno Superstore trade receivable'
+      }
+    ],
+    totalDebit: 8860000,
+    totalCredit: 8860000,
+    createdBy: 'Sabina Yasmin',
+    createdAt: '2026-09-18T13:10:00Z',
+    postedAt: '2026-09-18T13:10:00Z'
+  },
+  {
+    id: 'jv-2026-0008',
+    entryNumber: 'JV-2026-0008',
+    date: '2026-09-19',
+    companyId: 'c-foods',
+    companyName: 'ABC Foods Ltd.',
+    reference: 'INV-2026-001855',
+    type: 'standard',
+    status: 'posted',
+    memo: 'Vendor payment issued by cheque — Rangs Logistics',
+    lines: [
+      {
+        id: 'jl-16',
+        accountCode: '2110',
+        accountName: 'Accounts Payable (Trade)',
+        costCenterId: 'cc-foods-fin-001',
+        costCenterCode: 'CC-FOODS-FIN-001',
+        debit: 740000,
+        credit: 0,
+        description: 'Settlement of Rangs Logistics payable'
+      },
+      {
+        id: 'jl-17',
+        accountCode: '1110',
+        accountName: 'Cash & Cash Equivalents',
+        costCenterId: 'cc-foods-fin-001',
+        costCenterCode: 'CC-FOODS-FIN-001',
+        debit: 0,
+        credit: 740000,
+        description: 'Outward cheque issued to Rangs Logistics'
+      }
+    ],
+    totalDebit: 740000,
+    totalCredit: 740000,
+    createdBy: 'Rahim Ahmed',
+    createdAt: '2026-09-19T10:05:00Z',
+    postedAt: '2026-09-19T10:05:00Z'
   }
 ];
+
+// Posted vouchers are immutable from the moment they are created — isPosted/lockedAt
+// are derived here rather than repeated on every seed entry above.
+export const initialJournalEntries: JournalEntry[] = seededJournalEntries.map((entry) => ({
+  ...entry,
+  isPosted: entry.status === 'posted',
+  lockedAt: entry.postedAt
+}));
 
 // Runtime store for posted journal vouchers
 export let journalVouchers: JournalEntry[] = [...initialJournalEntries];
@@ -406,9 +497,88 @@ export function validateJournalBalance(lines: Array<{ debit: number; credit: num
   return { balanced, totalDebit, totalCredit, difference, message };
 }
 
+// ─── Fiscal Period Closing ────────────────────────────────────────────────────
+// Prevents unauthorized retro-active ledger tampering: once a month is closed,
+// postJournalEntry() and reverseJournalEntry() below both refuse to touch it.
+
+export const initialFiscalPeriods: FiscalPeriod[] = [
+  { id: 'fp-2026-01', label: 'January 2026', year: 2026, month: 1, status: 'hard-closed', closedBy: 'Nasrin Sultana', closedAt: '2026-02-05T09:00:00Z' },
+  { id: 'fp-2026-02', label: 'February 2026', year: 2026, month: 2, status: 'hard-closed', closedBy: 'Nasrin Sultana', closedAt: '2026-03-05T09:00:00Z' },
+  { id: 'fp-2026-03', label: 'March 2026', year: 2026, month: 3, status: 'hard-closed', closedBy: 'Nasrin Sultana', closedAt: '2026-04-05T09:00:00Z' },
+  { id: 'fp-2026-04', label: 'April 2026', year: 2026, month: 4, status: 'hard-closed', closedBy: 'Nasrin Sultana', closedAt: '2026-05-05T09:00:00Z' },
+  { id: 'fp-2026-05', label: 'May 2026', year: 2026, month: 5, status: 'hard-closed', closedBy: 'Nasrin Sultana', closedAt: '2026-06-05T09:00:00Z' },
+  { id: 'fp-2026-06', label: 'June 2026', year: 2026, month: 6, status: 'hard-closed', closedBy: 'Nasrin Sultana', closedAt: '2026-07-05T09:00:00Z' },
+  { id: 'fp-2026-07', label: 'July 2026', year: 2026, month: 7, status: 'hard-closed', closedBy: 'Nasrin Sultana', closedAt: '2026-08-05T09:00:00Z' },
+  { id: 'fp-2026-08', label: 'August 2026', year: 2026, month: 8, status: 'soft-closed', closedBy: 'Nasrin Sultana', closedAt: '2026-09-05T09:00:00Z' },
+  { id: 'fp-2026-09', label: 'September 2026', year: 2026, month: 9, status: 'open' },
+  { id: 'fp-2026-10', label: 'October 2026', year: 2026, month: 10, status: 'open' },
+  { id: 'fp-2026-11', label: 'November 2026', year: 2026, month: 11, status: 'open' },
+  { id: 'fp-2026-12', label: 'December 2026', year: 2026, month: 12, status: 'open' }
+];
+
+export let fiscalPeriods: FiscalPeriod[] = [...initialFiscalPeriods];
+const periodListeners: Array<() => void> = [];
+
+export function getFiscalPeriods(): FiscalPeriod[] {
+  return [...fiscalPeriods];
+}
+
+export function subscribeFiscalPeriods(listener: () => void): () => void {
+  periodListeners.push(listener);
+  return () => {
+    const idx = periodListeners.indexOf(listener);
+    if (idx !== -1) periodListeners.splice(idx, 1);
+  };
+}
+
+export function getFiscalPeriodForDate(dateStr: string): FiscalPeriod | undefined {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return fiscalPeriods.find((p) => p.year === d.getUTCFullYear() && p.month === d.getUTCMonth() + 1);
+}
+
+/** Only adjusting/closing/reversing entries — never ordinary business activity — may post into a soft-closed period. */
+export function isEntryTypeAllowedWhenSoftClosed(type: string): boolean {
+  return type === 'adjusting' || type === 'closing' || type === 'reversing';
+}
+
+export function assertPeriodOpenForPosting(dateStr: string, entryType: string): void {
+  const period = getFiscalPeriodForDate(dateStr);
+  if (!period || period.status === 'open') return;
+
+  if (period.status === 'hard-closed') {
+    throw new Error(
+      `Posting Blocked: Fiscal period "${period.label}" is hard closed. No postings are permitted for this period.`
+    );
+  }
+
+  if (!isEntryTypeAllowedWhenSoftClosed(entryType)) {
+    throw new Error(
+      `Posting Blocked: Fiscal period "${period.label}" is soft closed. Only adjusting, closing or reversing entries may be posted; standard entries are rejected.`
+    );
+  }
+}
+
+export function setFiscalPeriodStatus(periodId: string, status: FiscalPeriodStatus, closedBy: string): FiscalPeriod {
+  const idx = fiscalPeriods.findIndex((p) => p.id === periodId);
+  if (idx === -1) throw new Error('Fiscal period not found.');
+
+  const now = new Date().toISOString();
+  const updated: FiscalPeriod = {
+    ...fiscalPeriods[idx],
+    status,
+    closedBy: status === 'open' ? undefined : closedBy,
+    closedAt: status === 'open' ? undefined : now
+  };
+
+  fiscalPeriods = fiscalPeriods.map((p, i) => (i === idx ? updated : p));
+  periodListeners.forEach((l) => l());
+  return updated;
+}
+
 // ─── Journal Entry Poster ───────────────────────────────────────────────────
 
-let nextJvId = 7;
+let nextJvId = 9;
 
 export function postJournalEntry(data: {
   date: string;
@@ -434,6 +604,9 @@ export function postJournalEntry(data: {
     throw new Error(`Double-Entry Violation: Cannot post unbalanced journal entry (${balanceCheck.message})`);
   }
 
+  // Fiscal period lock check — closed periods reject postings outright
+  assertPeriodOpenForPosting(data.date, data.type ?? 'standard');
+
   const idNum = String(nextJvId++).padStart(4, '0');
   const now = new Date().toISOString();
 
@@ -455,12 +628,88 @@ export function postJournalEntry(data: {
     totalCredit: balanceCheck.totalCredit,
     createdBy: data.createdBy,
     createdAt: now,
-    postedAt: now
+    postedAt: now,
+    isPosted: true,
+    lockedAt: now
   };
 
   journalVouchers = [newEntry, ...journalVouchers];
   listeners.forEach((l) => l());
   return newEntry;
+}
+
+// ─── Reversal Engine ─────────────────────────────────────────────────────────
+// Posted vouchers are immutable — the ONLY correction mechanism is a mirror
+// compensating entry that references the original voucher and carries a
+// mandatory audit justification. The original is never edited or deleted.
+
+export function reverseJournalEntry(params: {
+  originalId: string;
+  reason: string;
+  createdBy: string;
+}): JournalEntry {
+  const original = journalVouchers.find((v) => v.id === params.originalId);
+  if (!original) {
+    throw new Error('Cannot reverse: original journal voucher was not found.');
+  }
+  if (original.status !== 'posted') {
+    throw new Error(
+      `Cannot reverse ${original.entryNumber}: only posted vouchers may be reversed (current status: ${original.status}).`
+    );
+  }
+  if (!params.reason || !params.reason.trim()) {
+    throw new Error('A mandatory audit justification is required to reverse a posted voucher.');
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Fiscal period lock check — a reversal is still a posting and must obey the same lock
+  assertPeriodOpenForPosting(today, 'reversing');
+
+  const idNum = String(nextJvId++).padStart(4, '0');
+  const now = new Date().toISOString();
+  const reason = params.reason.trim();
+
+  const reversalLines: JournalLineItem[] = original.lines.map((line, idx) => ({
+    ...line,
+    id: `jl-${idNum}-${idx + 1}`,
+    debit: line.credit,
+    credit: line.debit,
+    description: `Reversal: ${line.description}`
+  }));
+
+  const reversalEntry: JournalEntry = {
+    id: `jv-2026-${idNum}`,
+    entryNumber: `JV-2026-${idNum}`,
+    date: today,
+    companyId: original.companyId,
+    companyName: original.companyName,
+    reference: original.entryNumber,
+    type: 'reversing',
+    status: 'posted',
+    memo: `Reversal of ${original.entryNumber}: ${reason}`,
+    lines: reversalLines,
+    totalDebit: original.totalCredit,
+    totalCredit: original.totalDebit,
+    createdBy: params.createdBy,
+    createdAt: now,
+    postedAt: now,
+    isPosted: true,
+    lockedAt: now,
+    reversalOfEntryId: original.id,
+    reversalOfEntryNumber: original.entryNumber,
+    reversalReason: reason
+  };
+
+  // Mark the original as reversed — status metadata only, its lines/amounts stay untouched
+  journalVouchers = journalVouchers.map((v) =>
+    v.id === original.id
+      ? { ...v, status: 'reversed' as const, reversedByEntryId: reversalEntry.id, reversedByEntryNumber: reversalEntry.entryNumber }
+      : v
+  );
+  journalVouchers = [reversalEntry, ...journalVouchers];
+  listeners.forEach((l) => l());
+  return reversalEntry;
 }
 
 // ─── General Ledger Calculation Engine ──────────────────────────────────────
@@ -680,4 +929,342 @@ export function formatCurrency(value: number): string {
 
 export function formatCurrencyFull(value: number): string {
   return `৳${Number(value || 0).toLocaleString('en-IN')}`;
+}
+
+// ─── Issue #08: Bank Reconciliation & Sub-Ledger Integration ────────────────
+// Bank statement lines are matched against GL postings to the Cash/Bank account
+// (default '1110'). GL postings are addressed by a stable `${journalEntryId}::${lineId}`
+// key rather than the display-oriented GeneralLedgerPosting.id, which shifts as
+// new entries are inserted into the date-sorted GL.
+
+export const initialBankStatements: BankStatement[] = [
+  {
+    id: 'bstmt-foods-2026-09',
+    companyId: 'c-foods',
+    companyName: 'ABC Foods Ltd.',
+    bankName: 'Standard Chartered Bank',
+    accountNumberMasked: '••••••4821',
+    glAccountCode: '1110',
+    periodLabel: 'September 2026',
+    openingBalance: 118500000,
+    closingBalance: 114547750,
+    importedAt: '2026-09-22T06:00:00Z',
+    importedBy: 'Nasrin Sultana',
+    transactions: [
+      { id: 'btx-f1', statementId: 'bstmt-foods-2026-09', date: '2026-09-08', description: 'ACH Payroll Disbursement Batch', reference: 'PAY-SEP-2026', amount: 12070000, direction: 'debit', status: 'unmatched' },
+      { id: 'btx-f2', statementId: 'bstmt-foods-2026-09', date: '2026-09-18', description: 'Inward RTGS — Shwapno Superstore', reference: 'INV-2026-001830', amount: 8860000, direction: 'credit', status: 'unmatched' },
+      { id: 'btx-f3', statementId: 'bstmt-foods-2026-09', date: '2026-09-19', description: 'Outward Cheque — Rangs Logistics Ltd', reference: 'INV-2026-001855', amount: 740000, direction: 'debit', status: 'unmatched' },
+      { id: 'btx-f4', statementId: 'bstmt-foods-2026-09', date: '2026-09-20', description: 'Monthly Account Maintenance Fee', reference: 'BANK-FEE-SEP26', amount: 3500, direction: 'debit', status: 'unmatched' },
+      { id: 'btx-f5', statementId: 'bstmt-foods-2026-09', date: '2026-09-21', description: 'Interest Credited — Savings Sweep', reference: 'INT-SEP26', amount: 1250, direction: 'credit', status: 'unmatched' }
+    ]
+  },
+  {
+    id: 'bstmt-tech-2026-09',
+    companyId: 'c-tech',
+    companyName: 'ABC Technologies Ltd.',
+    bankName: 'Eastern Bank PLC',
+    accountNumberMasked: '••••••1190',
+    glAccountCode: '1110',
+    periodLabel: 'September 2026',
+    openingBalance: 42000000,
+    closingBalance: 54385000,
+    importedAt: '2026-09-22T06:00:00Z',
+    importedBy: 'Rumana Haque',
+    transactions: [
+      { id: 'btx-t1', statementId: 'bstmt-tech-2026-09', date: '2026-09-15', description: 'Inward Wire — City Bank PLC Settlement', reference: 'INV-2026-001887', amount: 12400000, direction: 'credit', status: 'unmatched' },
+      { id: 'btx-t2', statementId: 'bstmt-tech-2026-09', date: '2026-09-16', description: 'Wire Transfer Processing Fee', reference: 'WIRE-FEE-0915', amount: 15000, direction: 'debit', status: 'unmatched' }
+    ]
+  }
+];
+
+export let bankStatements: BankStatement[] = initialBankStatements.map((s) => ({ ...s, transactions: [...s.transactions] }));
+const bankStatementListeners: Array<() => void> = [];
+
+export function getBankStatements(): BankStatement[] {
+  return bankStatements.map((s) => ({ ...s, transactions: [...s.transactions] }));
+}
+
+export function subscribeBankStatements(listener: () => void): () => void {
+  bankStatementListeners.push(listener);
+  return () => {
+    const idx = bankStatementListeners.indexOf(listener);
+    if (idx !== -1) bankStatementListeners.splice(idx, 1);
+  };
+}
+
+function notifyBankStatements(): void {
+  bankStatementListeners.forEach((l) => l());
+}
+
+/** Every GL posting to `glAccountCode` for the scoped company, read live off journalVouchers. */
+export function getReconcilableLedgerLines(companyId: string | null | undefined, glAccountCode: string): ReconcilableLedgerLine[] {
+  const scoped = companyId && companyId !== '*' && companyId !== 'all'
+    ? journalVouchers.filter((e) => e.companyId === companyId || e.companyId === companyId.replace(/^c-/, 'le-') || e.companyId === companyId.replace(/^le-/, 'c-'))
+    : journalVouchers;
+
+  const out: ReconcilableLedgerLine[] = [];
+  for (const entry of scoped) {
+    for (const line of entry.lines) {
+      if (line.accountCode !== glAccountCode) continue;
+      out.push({
+        key: `${entry.id}::${line.id}`,
+        journalEntryId: entry.id,
+        journalEntryNumber: entry.entryNumber,
+        lineId: line.id,
+        date: entry.date,
+        description: line.description || entry.memo,
+        reference: entry.reference,
+        debit: line.debit,
+        credit: line.credit,
+        companyId: entry.companyId,
+        companyName: entry.companyName
+      });
+    }
+  }
+  return out.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+/** GL lines already claimed by any statement's matched transactions, across all statements. */
+function getMatchedLedgerKeys(): Set<string> {
+  const keys = new Set<string>();
+  for (const stmt of bankStatements) {
+    for (const txn of stmt.transactions) {
+      if (txn.status === 'matched' && txn.matchedLineKey) keys.add(txn.matchedLineKey);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Matches unmatched statement lines to unmatched GL postings on amount (exact, on the correct
+ * side for the transaction's direction), reference (case-insensitive exact or substring), and
+ * date proximity (within 5 days) — auto-matching only when exactly one candidate qualifies.
+ */
+export function autoReconcileStatement(statementId: string, actorName: string): { matchedCount: number } {
+  const statement = bankStatements.find((s) => s.id === statementId);
+  if (!statement) throw new Error('Bank statement not found.');
+
+  const ledgerLines = getReconcilableLedgerLines(statement.companyId, statement.glAccountCode);
+  const claimedKeys = getMatchedLedgerKeys();
+  const now = new Date().toISOString();
+  let matchedCount = 0;
+
+  const updatedTransactions = statement.transactions.map((txn) => {
+    if (txn.status === 'matched') return txn;
+
+    const candidates = ledgerLines.filter((line) => {
+      if (claimedKeys.has(line.key)) return false;
+      const glAmount = txn.direction === 'credit' ? line.debit : line.credit;
+      if (glAmount <= 0 || Math.abs(glAmount - txn.amount) > 0.01) return false;
+
+      const txnRef = (txn.reference || '').trim().toLowerCase();
+      const lineRef = (line.reference || '').trim().toLowerCase();
+      const refMatch = Boolean(txnRef) && Boolean(lineRef) && (txnRef === lineRef || lineRef.includes(txnRef) || txnRef.includes(lineRef));
+      if (!refMatch) return false;
+
+      const dayDiff = Math.abs(new Date(txn.date).getTime() - new Date(line.date).getTime()) / 86400000;
+      return dayDiff <= 5;
+    });
+
+    if (candidates.length !== 1) return txn;
+
+    claimedKeys.add(candidates[0].key);
+    matchedCount += 1;
+    return {
+      ...txn,
+      status: 'matched' as const,
+      matchedJournalEntryId: candidates[0].journalEntryId,
+      matchedJournalEntryNumber: candidates[0].journalEntryNumber,
+      matchedLineKey: candidates[0].key,
+      matchType: 'auto' as const,
+      matchedAt: now,
+      matchedBy: actorName
+    };
+  });
+
+  bankStatements = bankStatements.map((s) => (s.id === statementId ? { ...s, transactions: updatedTransactions } : s));
+  notifyBankStatements();
+  return { matchedCount };
+}
+
+/** Manually pair one unmatched statement line with one unmatched GL line the algorithm missed. */
+export function matchBankTransaction(statementId: string, transactionId: string, ledgerLineKey: string, actorName: string): void {
+  const statement = bankStatements.find((s) => s.id === statementId);
+  if (!statement) throw new Error('Bank statement not found.');
+  const txn = statement.transactions.find((t) => t.id === transactionId);
+  if (!txn) throw new Error('Statement transaction not found.');
+  if (txn.status === 'matched') throw new Error('This statement line is already matched — unmatch it first.');
+  if (getMatchedLedgerKeys().has(ledgerLineKey)) throw new Error('That ledger posting is already matched to another statement line.');
+
+  const [journalEntryId] = ledgerLineKey.split('::');
+  const entry = journalVouchers.find((e) => e.id === journalEntryId);
+  if (!entry) throw new Error('Ledger posting not found.');
+
+  const now = new Date().toISOString();
+  bankStatements = bankStatements.map((s) =>
+    s.id !== statementId
+      ? s
+      : {
+          ...s,
+          transactions: s.transactions.map((t) =>
+            t.id !== transactionId
+              ? t
+              : {
+                  ...t,
+                  status: 'matched' as const,
+                  matchedJournalEntryId: entry.id,
+                  matchedJournalEntryNumber: entry.entryNumber,
+                  matchedLineKey: ledgerLineKey,
+                  matchType: 'manual' as const,
+                  matchedAt: now,
+                  matchedBy: actorName
+                }
+          )
+        }
+  );
+  notifyBankStatements();
+}
+
+/** Breaks a match, returning both sides to 'unmatched' — for correcting a wrong auto/manual pairing. */
+export function unmatchBankTransaction(statementId: string, transactionId: string): void {
+  bankStatements = bankStatements.map((s) =>
+    s.id !== statementId
+      ? s
+      : {
+          ...s,
+          transactions: s.transactions.map((t) =>
+            t.id !== transactionId
+              ? t
+              : {
+                  ...t,
+                  status: 'unmatched' as const,
+                  matchedJournalEntryId: undefined,
+                  matchedJournalEntryNumber: undefined,
+                  matchedLineKey: undefined,
+                  matchType: undefined,
+                  matchedAt: undefined,
+                  matchedBy: undefined
+                }
+          )
+        }
+  );
+  notifyBankStatements();
+}
+
+/**
+ * For a statement line with no corresponding GL entry at all (bank charges, interest credited) —
+ * posts the missing journal voucher through the normal double-entry engine (so fiscal period locks
+ * still apply) and immediately links the statement line to it as an 'adjustment' match.
+ */
+export function postBankAdjustment(params: {
+  statementId: string;
+  transactionId: string;
+  type: 'bank-charge' | 'interest-income';
+  costCenterId: string;
+  costCenterCode: string;
+  createdBy: string;
+}): JournalEntry {
+  const statement = bankStatements.find((s) => s.id === params.statementId);
+  if (!statement) throw new Error('Bank statement not found.');
+  const txn = statement.transactions.find((t) => t.id === params.transactionId);
+  if (!txn) throw new Error('Statement transaction not found.');
+  if (txn.status === 'matched') throw new Error('This statement line is already matched.');
+
+  const isCharge = params.type === 'bank-charge';
+
+  const entry = postJournalEntry({
+    date: txn.date,
+    companyId: statement.companyId,
+    companyName: statement.companyName,
+    reference: txn.reference || `${statement.bankName} Statement`,
+    memo: `Bank Reconciliation Adjustment — ${txn.description}`,
+    type: 'adjusting',
+    createdBy: params.createdBy,
+    lines: [
+      {
+        accountCode: isCharge ? '6130' : statement.glAccountCode,
+        accountName: isCharge ? 'Bank Charges & Fees' : 'Cash & Cash Equivalents',
+        costCenterId: params.costCenterId,
+        costCenterCode: params.costCenterCode,
+        debit: txn.amount,
+        credit: 0,
+        description: txn.description
+      },
+      {
+        accountCode: isCharge ? statement.glAccountCode : '4140',
+        accountName: isCharge ? 'Cash & Cash Equivalents' : 'Interest Income',
+        costCenterId: params.costCenterId,
+        costCenterCode: params.costCenterCode,
+        debit: 0,
+        credit: txn.amount,
+        description: txn.description
+      }
+    ]
+  });
+
+  const lineKey = `${entry.id}::${entry.lines[0].id}`;
+  const now = new Date().toISOString();
+  bankStatements = bankStatements.map((s) =>
+    s.id !== statement.id
+      ? s
+      : {
+          ...s,
+          transactions: s.transactions.map((t) =>
+            t.id !== txn.id
+              ? t
+              : {
+                  ...t,
+                  status: 'matched' as const,
+                  matchedJournalEntryId: entry.id,
+                  matchedJournalEntryNumber: entry.entryNumber,
+                  matchedLineKey: lineKey,
+                  matchType: 'adjustment' as const,
+                  matchedAt: now,
+                  matchedBy: params.createdBy
+                }
+          )
+        }
+  );
+  notifyBankStatements();
+
+  return entry;
+}
+
+export function getBankReconciliationSummary(statementId: string): BankReconciliationSummary {
+  const statement = bankStatements.find((s) => s.id === statementId);
+  if (!statement) throw new Error('Bank statement not found.');
+
+  // Anchored on the statement's own opening balance, NOT calculateAccountBalances()'s group-wide
+  // openingBalance for account 1110 — that figure represents the consolidated cash position across
+  // every one of the company's bank accounts, whereas one BankStatement is only ONE of those
+  // accounts. Using the shared group baseline here would swamp "Unmatched Difference" with an
+  // unrelated pooling gap instead of showing the genuine unreconciled items.
+  const account = initialChartOfAccounts.find((a) => a.code === statement.glAccountCode);
+  const normal = account?.normalBalance ?? 'debit';
+
+  const ledgerLines = getReconcilableLedgerLines(statement.companyId, statement.glAccountCode);
+  const ledgerNetMovement = ledgerLines.reduce(
+    (sum, l) => sum + (normal === 'debit' ? l.debit - l.credit : l.credit - l.debit),
+    0
+  );
+  const ledgerBalance = statement.openingBalance + ledgerNetMovement;
+
+  const matchedTxns = statement.transactions.filter((t) => t.status === 'matched');
+  const unmatchedTxns = statement.transactions.filter((t) => t.status !== 'matched');
+
+  const reconciledBalance =
+    statement.openingBalance + matchedTxns.reduce((sum, t) => sum + (t.direction === 'credit' ? t.amount : -t.amount), 0);
+
+  const matchedLedgerKeys = new Set(matchedTxns.map((t) => t.matchedLineKey).filter(Boolean));
+  const unmatchedLedgerCount = ledgerLines.filter((l) => !matchedLedgerKeys.has(l.key)).length;
+
+  return {
+    statementBalance: statement.closingBalance,
+    ledgerBalance,
+    reconciledBalance,
+    unmatchedDifference: statement.closingBalance - ledgerBalance,
+    matchedCount: matchedTxns.length,
+    unmatchedStatementCount: unmatchedTxns.length,
+    unmatchedLedgerCount
+  };
 }

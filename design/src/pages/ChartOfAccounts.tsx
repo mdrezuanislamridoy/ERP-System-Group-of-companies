@@ -16,12 +16,15 @@ import {
 import { group, companies, costCenters } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
 import { JournalEntryModal } from '../components/finance/JournalEntryModal';
+import { ReverseJournalModal } from '../components/finance/ReverseJournalModal';
+import type { JournalEntry } from '../types';
 
 export function ChartOfAccounts() {
   const { companyId, companyName, can } = useApp();
 
   const [activeTab, setActiveTab] = useState<'accounts' | 'gl' | 'trial' | 'vouchers'>('accounts');
   const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
+  const [reversalTarget, setReversalTarget] = useState<JournalEntry | null>(null);
   const [vouchers, setVouchers] = useState(journalVouchers);
 
   // Filters
@@ -657,9 +660,25 @@ export function ChartOfAccounts() {
                               <span className="font-mono text-sm font-bold text-accent">
                                 {voucher.entryNumber}
                               </span>
-                              <Badge tone={voucher.status === 'posted' ? 'success' : 'warning'}>
+                              <Badge
+                                tone={
+                                  voucher.status === 'posted'
+                                    ? 'success'
+                                    : voucher.status === 'reversed'
+                                    ? 'danger'
+                                    : 'warning'
+                                }
+                              >
                                 {voucher.status.toUpperCase()}
                               </Badge>
+                              {voucher.isPosted && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-2xs text-faint"
+                                  title={`Locked at ${voucher.lockedAt}. Posted vouchers cannot be edited or deleted.`}
+                                >
+                                  🔒 Locked
+                                </span>
+                              )}
                               <span className="text-xs text-muted">
                                 {voucher.companyName}
                               </span>
@@ -667,6 +686,17 @@ export function ChartOfAccounts() {
                             <div className="text-sm text-ink mt-0.5 font-medium">
                               {voucher.memo}
                             </div>
+                            {voucher.reversalOfEntryId && (
+                              <div className="mt-1 text-2xs text-danger">
+                                Reverses <span className="font-mono">{voucher.reversalOfEntryNumber}</span>
+                                {voucher.reversalReason && <> — “{voucher.reversalReason}”</>}
+                              </div>
+                            )}
+                            {voucher.reversedByEntryId && (
+                              <div className="mt-1 text-2xs text-danger">
+                                Reversed by <span className="font-mono">{voucher.reversedByEntryNumber}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -683,6 +713,19 @@ export function ChartOfAccounts() {
                               {formatCurrencyFull(voucher.totalDebit)}
                             </div>
                           </div>
+                          {voucher.status === 'posted' && can('finance.approve') && (
+                            <Button
+                              variant="danger"
+                              size="xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReversalTarget(voucher);
+                              }}
+                              title="Posted vouchers are immutable — corrections must go through a Reverse Journal Entry"
+                            >
+                              Reverse
+                            </Button>
+                          )}
                         </div>
                       </div>
 
@@ -771,6 +814,17 @@ export function ChartOfAccounts() {
         onClose={() => setIsJournalModalOpen(false)}
         onSuccess={() => {
           setVouchers([...journalVouchers]);
+        }}
+      />
+
+      {/* Reverse Journal Voucher Modal */}
+      <ReverseJournalModal
+        isOpen={Boolean(reversalTarget)}
+        voucher={reversalTarget}
+        onClose={() => setReversalTarget(null)}
+        onSuccess={() => {
+          setVouchers([...journalVouchers]);
+          setReversalTarget(null);
         }}
       />
     </div>
