@@ -29,6 +29,7 @@ import { SensitiveField } from '../components/common/SensitiveField';
 import { StepUpAuthModal } from '../components/common/StepUpAuthModal';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
+import { AttendanceCalendar } from '../components/hr/AttendanceCalendar';
 import { cn } from '../utils/cn';
 import type { ActiveSession } from '../types';
 
@@ -80,13 +81,15 @@ export function Profile() {
       <div className="px-6">
         <Tabs
           tabs={[
-          { id: 'profile', label: 'Profile' },
-          { id: 'permissions', label: 'Roles & permissions' },
-          { id: 'security', label: 'Security' },
-          { id: 'preferences', label: 'Preferences' }]
-          }
+            { id: 'profile', label: 'Profile' },
+            { id: 'attendance', label: 'My Attendance' },
+            { id: 'permissions', label: 'Roles & permissions' },
+            { id: 'security', label: 'Security' },
+            { id: 'preferences', label: 'Preferences' },
+          ]}
           active={tab}
-          onChange={setTab} />
+          onChange={setTab}
+        />
         
       </div>
 
@@ -183,6 +186,15 @@ export function Profile() {
             </div>
           );
         })()}
+
+        {tab === 'attendance' && (
+          <Panel
+            title="My Monthly Attendance Register"
+            description={`Detailed day-wise working hours, check-in, check-out, and status for ${user.personName} (${user.employeeId})`}
+          >
+            <AttendanceCalendar employeeId={user.employeeId || 'EMP-10241'} />
+          </Panel>
+        )}
 
         {tab === 'permissions' &&
         <div className="space-y-4">

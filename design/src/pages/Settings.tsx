@@ -328,7 +328,7 @@ export function Settings() {
                             {isEnabled ? (
                               <Badge tone="success">Active</Badge>
                             ) : (
-                              <Badge tone="muted">Disabled</Badge>
+                              <Badge tone="neutral">Disabled</Badge>
                             )}
                           </div>
                           <p className="text-xs text-muted mt-0.5">{meta.description}</p>

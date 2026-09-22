@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClockIcon } from 'lucide-react';
+import { ClockIcon, SearchIcon, UserIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/ui/Panel';
 import { Tabs } from '../components/ui/Tabs';
@@ -7,9 +7,12 @@ import { Metric, MetricRow } from '../components/ui/Metric';
 import { Button } from '../components/ui/Button';
 import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { StateBlock } from '../components/ui/States';
+import { AttendanceCalendar } from '../components/hr/AttendanceCalendar';
 import { attendanceToday, employees, leaveRequests } from '../data/people';
+import { getViewableEmployees } from '../data/attendance';
 import { branches, group } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../utils/cn';
 
 // Per-branch attendance detail, keyed to the branch record so it always travels with the
@@ -24,7 +27,10 @@ const BRANCH_ATTENDANCE: Record<string, {present: number;late: number;onLeave: n
 
 export function HR() {
   const { role, can, companyId, companyName } = useApp();
+  const { user } = useAuth();
   const [tab, setTab] = useState('attendance');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+  const [employeeSearch, setEmployeeSearch] = useState('');
 
   // Managing other people's attendance/leave requires employee.read — a plain Staff/Employee
   // role never holds it, so they only ever get their own record, never the company roster.
@@ -32,6 +38,24 @@ export function HR() {
   const groupScoped = can('group.read');
 
   const companyBranches = branches.filter((b) => groupScoped || b.companyId === companyId);
+
+  // Resolve current user's employee ID
+  const myEmployeeId = user?.employeeId || 'EMP-10241';
+
+  // Get employees this user can view attendance for
+  const viewableEmployees = getViewableEmployees(myEmployeeId, companyName, canManageWorkforce, groupScoped);
+  const filteredEmployees = employeeSearch
+    ? viewableEmployees.filter(
+        (e) =>
+          e.name.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+          e.id.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+          e.department.toLowerCase().includes(employeeSearch.toLowerCase())
+      )
+    : viewableEmployees;
+
+  // Currently selected employee for the calendar
+  const activeCalendarEmpId = selectedEmployeeId || (canManageWorkforce ? '' : myEmployeeId);
+  const activeCalendarEmp = employees.find((e) => e.id === activeCalendarEmpId);
 
   const scopedLeaveRequests = groupScoped ?
   leaveRequests :
@@ -128,36 +152,118 @@ export function HR() {
                 </table>
               }
             </Panel>
+
+            {/* Employee Day-Wise Attendance Register (Manager/HR View) */}
+            <Panel
+              title="Employee Day-Wise Attendance Register"
+              description="Select any employee within your scope to view their detailed monthly attendance."
+            >
+              {/* Employee Selector */}
+              <div className="mb-4">
+                <div className="relative">
+                  <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                  <input
+                    type="text"
+                    value={employeeSearch}
+                    onChange={(e) => setEmployeeSearch(e.target.value)}
+                    placeholder="Search employees by name, ID, or department..."
+                    className="w-full rounded-lg border border-line bg-canvas pl-10 pr-3 py-2 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+                  />
+                </div>
+
+                {!activeCalendarEmpId && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                    {filteredEmployees.map((emp) => (
+                      <button
+                        key={emp.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedEmployeeId(emp.id);
+                          setEmployeeSearch('');
+                        }}
+                        className="flex items-center gap-2.5 rounded-lg border border-line bg-surface p-2.5 text-left hover:border-accent/40 hover:bg-accent-soft/20 transition-colors"
+                      >
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-canvas border border-line text-muted">
+                          <UserIcon className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-ink truncate">{emp.name}</p>
+                          <p className="text-2xs text-muted truncate">
+                            {emp.id} · {emp.department} · {emp.company}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {activeCalendarEmpId && (
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-xs text-muted">
+                      Viewing: <strong className="text-ink">{activeCalendarEmp?.name}</strong> ({activeCalendarEmpId})
+                    </p>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => setSelectedEmployeeId('')}
+                    >
+                      Change employee
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {activeCalendarEmpId ? (
+                <AttendanceCalendar
+                  employeeId={activeCalendarEmpId}
+                  employeeName={activeCalendarEmp?.name}
+                />
+              ) : (
+                <div className="py-8 text-center">
+                  <UserIcon className="mx-auto h-8 w-8 text-muted/40 mb-2" />
+                  <p className="text-sm text-muted">Select an employee above to view their day-wise attendance register.</p>
+                </div>
+              )}
+            </Panel>
           </> :
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <section className="rounded-lg border border-line bg-subtle p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-muted">Your attendance today</p>
-                  <p className="mt-1 font-mono text-3xl font-semibold leading-none text-ink">09:12 AM</p>
-                  <p className="mt-1.5 text-base text-muted">Checked in · Corporate HQ — Gulshan</p>
+        /* Self-Service View: Every employee sees their own attendance */
+        <div className="space-y-4">
+            {/* Today's Status Strip */}
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <section className="rounded-xl border border-line bg-subtle p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-muted">Your attendance today</p>
+                    <p className="mt-1 font-mono text-3xl font-semibold leading-none text-ink">09:12 AM</p>
+                    <p className="mt-1.5 text-base text-muted">Checked in · Corporate HQ — Gulshan</p>
+                  </div>
+                  <Button variant="danger" icon={ClockIcon}>
+                    Check out
+                  </Button>
                 </div>
-                <Button variant="danger" icon={ClockIcon}>
-                  Check out
-                </Button>
-              </div>
-            </section>
-            <Panel title="Leave balance" bodyClassName="p-4">
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div>
-                  <p className="font-mono text-2xl font-semibold text-ink">12</p>
-                  <p className="text-sm text-muted">Annual</p>
+              </section>
+              <Panel title="Leave balance" bodyClassName="p-4">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <p className="font-mono text-2xl font-semibold text-ink">12</p>
+                    <p className="text-sm text-muted">Annual</p>
+                  </div>
+                  <div>
+                    <p className="font-mono text-2xl font-semibold text-ink">6</p>
+                    <p className="text-sm text-muted">Sick</p>
+                  </div>
+                  <div>
+                    <p className="font-mono text-2xl font-semibold text-ink">3</p>
+                    <p className="text-sm text-muted">Casual</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-mono text-2xl font-semibold text-ink">6</p>
-                  <p className="text-sm text-muted">Sick</p>
-                </div>
-                <div>
-                  <p className="font-mono text-2xl font-semibold text-ink">3</p>
-                  <p className="text-sm text-muted">Casual</p>
-                </div>
-              </div>
+              </Panel>
+            </div>
+
+            {/* Full Day-Wise Attendance Calendar */}
+            <Panel title="My Monthly Attendance" description="Your day-wise attendance register for the current period">
+              <AttendanceCalendar employeeId={myEmployeeId} />
             </Panel>
           </div> :
 

@@ -9,6 +9,7 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 import { StateBlock } from '../components/ui/States';
 import { SensitiveField } from '../components/common/SensitiveField';
+import { AttendanceCalendar } from '../components/hr/AttendanceCalendar';
 import { employees } from '../data/people';
 import { activity } from '../data/system';
 import { group } from '../data/organization';
@@ -233,29 +234,17 @@ export function EmployeeDetail() {
           </Panel>
         }
 
-        {tab === 'attendance' &&
-        <Panel title="Attendance — September 2026" bodyClassName="p-4">
-            <div className="grid grid-cols-7 gap-1.5">
-              {Array.from({ length: 21 }).map((_, i) => {
-              const state = i % 7 === 5 || i % 7 === 6 ? 'off' : i === 12 ? 'leave' : i % 9 === 4 ? 'late' : 'present';
-              const cls =
-              state === 'off' ?
-              'bg-canvas text-faint' :
-              state === 'leave' ?
-              'bg-info-soft text-info' :
-              state === 'late' ?
-              'bg-warning-soft text-warning' :
-              'bg-success-soft text-success';
-              return (
-                <div key={i} className={`rounded border border-line px-2 py-2 text-center ${cls}`}>
-                    <p className="font-mono text-sm">{i + 1}</p>
-                    <p className="text-2xs uppercase">{state}</p>
-                  </div>);
-
-            })}
-            </div>
+        {tab === 'attendance' && (
+          <Panel
+            title={`Attendance Register — September 2026`}
+            description={`Day-wise attendance, working hours, and punch timestamps for ${employee.name} (${employee.id})`}
+          >
+            <AttendanceCalendar
+              employeeId={employee.id}
+              employeeName={employee.name}
+            />
           </Panel>
-        }
+        )}
 
         {tab === 'payroll' && (
         can('payroll.read') ?

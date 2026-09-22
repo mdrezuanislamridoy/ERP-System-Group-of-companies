@@ -159,9 +159,13 @@ export function AuditLogs() {
               {a.currentHash ? `${a.currentHash.slice(0, 8)}...${a.currentHash.slice(-6)}` : '—'}
             </span>
             {isBlockTampered ? (
-              <ShieldAlertIcon className="h-3.5 w-3.5 text-danger shrink-0" title="Tampered Block!" />
+              <span title="Tampered Block!">
+                <ShieldAlertIcon className="h-3.5 w-3.5 text-danger shrink-0" />
+              </span>
             ) : (
-              <ShieldCheckIcon className="h-3.5 w-3.5 text-emerald-500 shrink-0" title="Cryptographically Sealed" />
+              <span title="Cryptographically Sealed">
+                <ShieldCheckIcon className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+              </span>
             )}
           </div>
         );
@@ -213,7 +217,7 @@ export function AuditLogs() {
         actions={
           <div className="flex items-center gap-2">
             <Button
-              variant={verification.isValid ? 'outline' : 'danger'}
+              variant={verification.isValid ? 'secondary' : 'danger'}
               onClick={handleVerifyChain}
               className="flex items-center gap-1.5"
             >
