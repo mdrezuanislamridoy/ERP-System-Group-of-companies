@@ -305,6 +305,7 @@ const poLine0002 = buildPOLine({ id: 'pol-0002-1', sku: 'FUEL-DIESEL-BULK', desc
 // this PO is that shipment. It's seeded Issued/not-yet-received so recording its receipt live
 // demonstrates the warehouse goods-arrival trigger against real, recognizable Inventory data.
 const poLine0003 = buildPOLine({ id: 'pol-0003-1', sku: 'PK-FILM-080', description: 'Packaging Film — 80 micron', qty: 1200, unit: 'Roll', unitPrice: 620, qtyReceived: 0 });
+const poLine0004 = buildPOLine({ id: 'pol-0004-1', sku: 'ENG-BRACKET-STD', description: 'Steel Mounting Brackets — Standard', qty: 500, unit: 'Unit', unitPrice: 340, qtyReceived: 500 });
 
 export const initialPurchaseOrders: PurchaseOrder[] = [
   {
@@ -373,6 +374,31 @@ export const initialPurchaseOrders: PurchaseOrder[] = [
     approvedBy: 'Rahim Ahmed',
     approvedAt: '2026-09-19T11:00:00Z',
     issuedAt: '2026-09-19T11:00:00Z'
+  },
+  {
+    id: 'po-2026-0004',
+    poNumber: 'PO-2026-0004',
+    supplierId: 'sup-bengal-steel',
+    supplierName: 'Bengal Steel Works',
+    companyId: 'c-foods',
+    companyName: 'ABC Foods Ltd.',
+    deliveryAddress: getCompanyDeliveryAddress('c-foods'),
+    lines: [poLine0004],
+    ...totalsFromLines([poLine0004]),
+    paymentTerms: 'Net 30',
+    status: 'Completed',
+    statusHistory: [
+      { status: 'Draft', at: '2026-09-02T09:00:00Z', by: 'Imran Hossain' },
+      { status: 'Pending Approval', at: '2026-09-02T09:15:00Z', by: 'Imran Hossain' },
+      { status: 'Issued', at: '2026-09-02T13:00:00Z', by: 'Rahim Ahmed' },
+      { status: 'Completed', at: '2026-09-09T10:30:00Z', by: 'Shahidul Alam', note: 'GRN-2026-0002 — full quantity accepted' }
+    ],
+    createdAt: '2026-09-02T09:00:00Z',
+    createdBy: 'Imran Hossain',
+    approvedBy: 'Rahim Ahmed',
+    approvedAt: '2026-09-02T13:00:00Z',
+    issuedAt: '2026-09-02T13:00:00Z',
+    closedAt: '2026-09-09T10:30:00Z'
   }
 ];
 
@@ -402,7 +428,7 @@ function notifyRFQs(): void {
 
 let nextRfqSeq = 4;
 let nextQuoteSeq = 1;
-let nextPoSeq = 4;
+let nextPoSeq = 5;
 let nextPoLineSeq = 1;
 
 export function createRFQ(data: {
@@ -651,7 +677,68 @@ export function cancelPurchaseOrder(poId: string, by: string, reason: string): P
 
 // ─── Issue #11: Goods Receipt Note (GRN) & QC Inspection ─────────────────────
 
-export let goodsReceiptNotes: GoodsReceiptNote[] = [];
+export const initialGoodsReceiptNotes: GoodsReceiptNote[] = [
+  {
+    id: 'grn-2026-0001',
+    grnNumber: 'GRN-2026-0001',
+    poId: 'po-2026-0002',
+    poNumber: 'PO-2026-0002',
+    supplierId: 'sup-padma',
+    supplierName: 'Padma Oil Company',
+    companyId: 'c-transport',
+    companyName: 'ABC Transport Ltd.',
+    warehouse: 'Savar Plant WH-01',
+    lines: [
+      {
+        id: 'grnl-0001-1',
+        poLineId: 'pol-0002-1',
+        sku: 'FUEL-DIESEL-BULK',
+        description: 'Diesel Fuel — Bulk Tanker Delivery',
+        unit: 'Litre',
+        qc: {
+          inspectorName: 'Mizanur Rahman',
+          inspectedAt: '2026-09-19T10:00:00Z',
+          receivedQty: 3000,
+          acceptedQty: 3000,
+          rejectedQty: 0
+        }
+      }
+    ],
+    receivedAt: '2026-09-19T10:00:00Z',
+    receivedBy: 'Mizanur Rahman'
+  },
+  {
+    id: 'grn-2026-0002',
+    grnNumber: 'GRN-2026-0002',
+    poId: 'po-2026-0004',
+    poNumber: 'PO-2026-0004',
+    supplierId: 'sup-bengal-steel',
+    supplierName: 'Bengal Steel Works',
+    companyId: 'c-foods',
+    companyName: 'ABC Foods Ltd.',
+    warehouse: 'Gazipur Plant II',
+    lines: [
+      {
+        id: 'grnl-0002-1',
+        poLineId: 'pol-0004-1',
+        sku: 'ENG-BRACKET-STD',
+        description: 'Steel Mounting Brackets — Standard',
+        unit: 'Unit',
+        qc: {
+          inspectorName: 'Roksana Begum',
+          inspectedAt: '2026-09-09T10:30:00Z',
+          receivedQty: 500,
+          acceptedQty: 500,
+          rejectedQty: 0
+        }
+      }
+    ],
+    receivedAt: '2026-09-09T10:30:00Z',
+    receivedBy: 'Shahidul Alam'
+  }
+];
+
+export let goodsReceiptNotes: GoodsReceiptNote[] = initialGoodsReceiptNotes.map((g) => ({ ...g, lines: [...g.lines] }));
 export let returnToVendorTickets: ReturnToVendorTicket[] = [];
 const inventoryListeners: Array<() => void> = [];
 
@@ -679,7 +766,7 @@ function notifyInventory(): void {
   inventoryListeners.forEach((l) => l());
 }
 
-let nextGrnSeq = 1;
+let nextGrnSeq = 3;
 let nextRtvSeq = 1;
 
 /**

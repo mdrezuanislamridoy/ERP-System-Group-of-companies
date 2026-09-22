@@ -52,6 +52,22 @@ export interface Employee {
   tin?: string;
 }
 
+// ─── Issue #12: Automated 3-Way Matching Engine (PO vs GRN vs Invoice) ───────
+
+export type InvoiceMatchStatus = 'Unmatched' | 'Matched' | 'Discrepancy' | 'Bypassed';
+
+export interface InvoiceLine {
+  id: string;
+  /** Links this billed line back to the PO line it's being invoiced against. */
+  poLineId?: string;
+  sku: string;
+  description: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  lineTotal: number;
+}
+
 export interface Invoice {
   id: string;
   party: string;
@@ -62,6 +78,44 @@ export interface Invoice {
   amount: number;
   balance: number;
   status: StatusKey;
+  /** Payable invoices sourced from procurement carry these for 3-way matching. */
+  poId?: string;
+  grnId?: string;
+  matchStatus?: InvoiceMatchStatus;
+  lines?: InvoiceLine[];
+  discountAmount?: number;
+  deductionAmount?: number;
+  matchOverrideBy?: string;
+  matchOverrideAt?: string;
+  matchOverrideReason?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+}
+
+export interface ThreeWayMatchLine {
+  poLineId: string;
+  sku: string;
+  description: string;
+  unit: string;
+  poQty: number;
+  poUnitPrice: number;
+  grnAcceptedQty: number;
+  billedQty: number;
+  billedUnitPrice: number;
+  /** billedQty > grnAcceptedQty, outside tolerance. */
+  quantityOverbill: boolean;
+  /** billedUnitPrice > poUnitPrice, outside tolerance. */
+  priceVariance: boolean;
+}
+
+export interface ThreeWayMatchResult {
+  status: InvoiceMatchStatus;
+  tolerancePct: number;
+  lines: ThreeWayMatchLine[];
+  /** Sum of min(billed, GRN-accepted) qty × min(billed, PO) unit price — what the match actually substantiates. */
+  substantiatedAmount: number;
+  /** substantiatedAmount − discounts − deductions. */
+  netPayable: number;
 }
 
 // ─── Issue #05: General Ledger & Double-Entry Accounting Types ───────────────

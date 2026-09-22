@@ -10,8 +10,11 @@ import type {
   FiscalPeriodStatus,
   BankStatement,
   ReconcilableLedgerLine,
-  BankReconciliationSummary
+  BankReconciliationSummary,
+  ThreeWayMatchLine,
+  ThreeWayMatchResult
 } from '../types';
+import { getPurchaseOrders, getGoodsReceiptNotes } from './operations';
 
 export const groupKpis = [
   { label: 'Revenue (YTD)', value: '৳245.0 Cr', delta: '+8.4%', tone: 'success' as const, sub: 'vs ৳226.1 Cr LY' },
@@ -54,7 +57,7 @@ export const financeKpis = [
   { label: 'Budget Utilization', value: '68.4%', sub: 'Q3 FY2026', tone: 'success' as const }
 ];
 
-export const invoices: Invoice[] = [
+const initialInvoices: Invoice[] = [
   { id: 'INV-2026-001928', party: 'Meghna Packaging Ltd.', company: 'ABC Foods Ltd.', type: 'Payable', issued: '02 Sep 2026', due: '02 Oct 2026', amount: 1840000, balance: 1840000, status: 'pending' },
   { id: 'INV-2026-001911', party: 'Unimart Retail Chain', company: 'ABC Foods Ltd.', type: 'Receivable', issued: '28 Aug 2026', due: '27 Sep 2026', amount: 6420000, balance: 3210000, status: 'processing' },
   { id: 'INV-2026-001902', party: 'Padma Oil Company', company: 'ABC Transport Ltd.', type: 'Payable', issued: '25 Aug 2026', due: '24 Sep 2026', amount: 9280000, balance: 9280000, status: 'failed' },
@@ -63,8 +66,66 @@ export const invoices: Invoice[] = [
   { id: 'INV-2026-001841', party: 'Bengal Steel Works', company: 'ABC Foods Ltd.', type: 'Payable', issued: '14 Aug 2026', due: '13 Sep 2026', amount: 3120000, balance: 3120000, status: 'draft' },
   { id: 'INV-2026-001830', party: 'Shwapno Superstore', company: 'ABC Grocery Ltd.', type: 'Receivable', issued: '11 Aug 2026', due: '10 Sep 2026', amount: 8860000, balance: 8860000, status: 'pending' },
   { id: 'INV-2026-001812', party: 'Navana Motors', company: 'ABC Transport Ltd.', type: 'Payable', issued: '06 Aug 2026', due: '05 Sep 2026', amount: 15600000, balance: 0, status: 'completed' },
-  { id: 'INV-2026-001788', party: 'Beximco Pharma', company: 'ABC Pharma Ltd.', type: 'Receivable', issued: '01 Aug 2026', due: '31 Aug 2026', amount: 2240000, balance: 2240000, status: 'cancelled' }
+  { id: 'INV-2026-001788', party: 'Beximco Pharma', company: 'ABC Pharma Ltd.', type: 'Receivable', issued: '01 Aug 2026', due: '31 Aug 2026', amount: 2240000, balance: 2240000, status: 'cancelled' },
+
+  // ─── Issue #12: Procurement-sourced Payables wired for 3-Way Matching ──────
+  {
+    id: 'INV-2026-002001',
+    party: 'Meghna Packaging Ltd.',
+    company: 'ABC Foods Ltd.',
+    type: 'Payable',
+    issued: '19 Sep 2026',
+    due: '19 Oct 2026',
+    amount: 855600,
+    balance: 855600,
+    status: 'pending',
+    poId: 'po-2026-0003',
+    // No GRN yet — PO-2026-0003 hasn't been received (see data/operations.ts), so this can't be verified.
+    matchStatus: 'Unmatched',
+    lines: [
+      { id: 'invl-2001-1', poLineId: 'pol-0003-1', sku: 'PK-FILM-080', description: 'Packaging Film — 80 micron', qty: 1200, unit: 'Roll', unitPrice: 620, lineTotal: 744000 }
+    ]
+  },
+  {
+    id: 'INV-2026-002002',
+    party: 'Padma Oil Company',
+    company: 'ABC Transport Ltd.',
+    type: 'Payable',
+    issued: '20 Sep 2026',
+    due: '05 Oct 2026',
+    amount: 718750,
+    balance: 718750,
+    status: 'pending',
+    poId: 'po-2026-0002',
+    grnId: 'grn-2026-0001',
+    // Bills the full 5,000L ordered, but GRN-2026-0001 only accepted 3,000L so far — Quantity Overbill.
+    matchStatus: 'Discrepancy',
+    lines: [
+      { id: 'invl-2002-1', poLineId: 'pol-0002-1', sku: 'FUEL-DIESEL-BULK', description: 'Diesel Fuel — Bulk Tanker Delivery', qty: 5000, unit: 'Litre', unitPrice: 125, lineTotal: 625000 }
+    ]
+  },
+  {
+    id: 'INV-2026-002003',
+    party: 'Bengal Steel Works',
+    company: 'ABC Foods Ltd.',
+    type: 'Payable',
+    issued: '10 Sep 2026',
+    due: '10 Oct 2026',
+    amount: 195500,
+    balance: 195500,
+    status: 'pending',
+    poId: 'po-2026-0004',
+    grnId: 'grn-2026-0002',
+    // Billed qty/price exactly match the PO and GRN-2026-0002 accepted the full quantity — clean match.
+    matchStatus: 'Matched',
+    lines: [
+      { id: 'invl-2003-1', poLineId: 'pol-0004-1', sku: 'ENG-BRACKET-STD', description: 'Steel Mounting Brackets — Standard', qty: 500, unit: 'Unit', unitPrice: 340, lineTotal: 170000 }
+    ]
+  }
 ];
+
+// Runtime store — mutable so Executive Overrides (Issue #12) can be recorded against an invoice.
+export let invoices: Invoice[] = initialInvoices.map((i) => ({ ...i, lines: i.lines ? [...i.lines] : undefined }));
 
 // ─── Chart of Accounts Hierarchy ──────────────────────────────────────────────
 
@@ -1267,4 +1328,131 @@ export function getBankReconciliationSummary(statementId: string): BankReconcili
     unmatchedStatementCount: unmatchedTxns.length,
     unmatchedLedgerCount
   };
+}
+
+// ─── Issue #12: Automated 3-Way Matching Engine (PO vs GRN vs Invoice) ───────
+// Cross-verifies a Payable invoice against the PO that authorized it and the GRN(s) that
+// confirm the goods actually arrived and passed QC — the standard AP fraud-prevention control.
+
+export const THREE_WAY_MATCH_TOLERANCE_PCT = 0.5;
+
+export function computeThreeWayMatch(invoice: Invoice, tolerancePct: number = THREE_WAY_MATCH_TOLERANCE_PCT): ThreeWayMatchResult {
+  if (!invoice.poId || !invoice.lines || invoice.lines.length === 0) {
+    return { status: 'Unmatched', tolerancePct, lines: [], substantiatedAmount: 0, netPayable: 0 };
+  }
+
+  const po = getPurchaseOrders().find((p) => p.id === invoice.poId);
+  if (!po) {
+    return { status: 'Unmatched', tolerancePct, lines: [], substantiatedAmount: 0, netPayable: 0 };
+  }
+
+  // The 3rd "way" is a specific referenced GRN — without one there's nothing to substantiate the
+  // bill against yet, so the invoice can't be anything but Unmatched (never a computed Discrepancy).
+  const grn = invoice.grnId ? getGoodsReceiptNotes().find((g) => g.id === invoice.grnId && g.poId === po.id) : undefined;
+
+  const acceptedByPoLine: Record<string, number> = {};
+  if (grn) {
+    for (const line of grn.lines) {
+      acceptedByPoLine[line.poLineId] = (acceptedByPoLine[line.poLineId] || 0) + line.qc.acceptedQty;
+    }
+  }
+
+  const withinTolerance = (billed: number, reference: number) => billed <= reference * (1 + tolerancePct / 100);
+
+  let substantiatedAmount = 0;
+  let anyDiscrepancy = false;
+  let anyLineMatched = false;
+
+  const lines: ThreeWayMatchLine[] = invoice.lines.map((invLine) => {
+    const poLine = invLine.poLineId ? po.lines.find((l) => l.id === invLine.poLineId) : undefined;
+    const poQty = poLine?.qty ?? 0;
+    const poUnitPrice = poLine?.unitPrice ?? 0;
+    const grnAcceptedQty = invLine.poLineId ? acceptedByPoLine[invLine.poLineId] || 0 : 0;
+
+    // Flags only mean something once a GRN exists to compare against — otherwise every line
+    // would trivially "overbill" a zero baseline, which is a missing receipt, not a fraud signal.
+    const quantityOverbill = Boolean(poLine) && Boolean(grn) && !withinTolerance(invLine.qty, grnAcceptedQty);
+    const priceVariance = Boolean(poLine) && !withinTolerance(invLine.unitPrice, poUnitPrice);
+
+    if (poLine && grn) {
+      anyLineMatched = true;
+      if (quantityOverbill || priceVariance) anyDiscrepancy = true;
+      const substantiatedQty = Math.min(invLine.qty, grnAcceptedQty);
+      const substantiatedPrice = Math.min(invLine.unitPrice, poUnitPrice);
+      substantiatedAmount += Math.max(0, substantiatedQty) * substantiatedPrice;
+    }
+
+    return {
+      poLineId: invLine.poLineId || '',
+      sku: invLine.sku,
+      description: invLine.description,
+      unit: invLine.unit,
+      poQty,
+      poUnitPrice,
+      grnAcceptedQty,
+      billedQty: invLine.qty,
+      billedUnitPrice: invLine.unitPrice,
+      quantityOverbill,
+      priceVariance
+    };
+  });
+
+  const status: ThreeWayMatchResult['status'] = !grn || !anyLineMatched ? 'Unmatched' : anyDiscrepancy ? 'Discrepancy' : 'Matched';
+  const netPayable = Math.max(0, substantiatedAmount - (invoice.discountAmount || 0) - (invoice.deductionAmount || 0));
+
+  return { status, tolerancePct, lines, substantiatedAmount, netPayable };
+}
+
+let invoiceOverrideListeners: Array<() => void> = [];
+
+function notifyInvoiceOverrides(): void {
+  invoiceOverrideListeners.forEach((l) => l());
+}
+
+export function subscribeInvoiceOverrides(listener: () => void): () => void {
+  invoiceOverrideListeners.push(listener);
+  return () => {
+    const idx = invoiceOverrideListeners.indexOf(listener);
+    if (idx !== -1) invoiceOverrideListeners.splice(idx, 1);
+  };
+}
+
+/** Executive Override — the only way a Discrepancy invoice can clear for payment. */
+export function setInvoiceMatchOverride(invoiceId: string, by: string, reason: string): Invoice {
+  if (!reason || !reason.trim()) throw new Error('An override reason is required.');
+  const invoice = invoices.find((i) => i.id === invoiceId);
+  if (!invoice) throw new Error('Invoice not found.');
+
+  const updated: Invoice = {
+    ...invoice,
+    matchOverrideBy: by,
+    matchOverrideAt: new Date().toISOString(),
+    matchOverrideReason: reason.trim(),
+    matchStatus: 'Bypassed'
+  };
+
+  invoices = invoices.map((i) => (i.id === invoiceId ? updated : i));
+  notifyInvoiceOverrides();
+  return updated;
+}
+
+export function getInvoices(): Invoice[] {
+  return [...invoices];
+}
+
+/** Gate enforced here too (not just in the UI) — Discrepancy/Unmatched invoices can only post
+ *  to AP once bypassed by an Executive Override. */
+export function approveInvoiceForPayment(invoiceId: string, by: string): Invoice {
+  const invoice = invoices.find((i) => i.id === invoiceId);
+  if (!invoice) throw new Error('Invoice not found.');
+
+  const matchStatus = invoice.matchStatus === 'Bypassed' ? 'Bypassed' : computeThreeWayMatch(invoice).status;
+  if (invoice.poId && matchStatus !== 'Matched' && matchStatus !== 'Bypassed') {
+    throw new Error(`Cannot approve for payment: 3-Way Match status is "${matchStatus}" — resolve the discrepancy or sign an Executive Override first.`);
+  }
+
+  const updated: Invoice = { ...invoice, status: 'approved', approvedBy: by, approvedAt: new Date().toISOString() };
+  invoices = invoices.map((i) => (i.id === invoiceId ? updated : i));
+  notifyInvoiceOverrides();
+  return updated;
 }
