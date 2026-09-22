@@ -173,6 +173,7 @@ export const initialChartOfAccounts: ChartAccount[] = [
   { code: '5110', name: 'Raw Material Consumption', level: 2, type: 'Expense', openingBalance: 980000000, parentCode: '5100', normalBalance: 'debit' },
   { code: '5120', name: 'Direct Factory Labor', level: 2, type: 'Expense', openingBalance: 260000000, parentCode: '5100', normalBalance: 'debit' },
   { code: '5130', name: 'Factory Overheads & Energy', level: 2, type: 'Expense', openingBalance: 180000000, parentCode: '5100', normalBalance: 'debit' },
+  { code: '5140', name: 'Inventory Write-Off & Scrap Expense', level: 2, type: 'Expense', openingBalance: 0, parentCode: '5100', normalBalance: 'debit' },
 
   // 6000 OPERATING EXPENSES
   { code: '6000', name: 'Operating Expenses', level: 0, type: 'Expense', openingBalance: 400000000, normalBalance: 'debit' },

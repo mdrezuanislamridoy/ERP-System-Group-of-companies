@@ -19,6 +19,9 @@ interface LineDraft {
   rejectedQty: string;
   rejectionReason: string;
   batchNumber: string;
+  manufacturingDate?: string;
+  expiryDate?: string;
+  binLocation?: string;
 }
 
 export function ReceiveGoodsModal({ isOpen, initialPoId, onClose, onSuccess }: ReceiveGoodsModalProps) {
@@ -56,7 +59,16 @@ export function ReceiveGoodsModal({ isOpen, initialPoId, onClose, onSuccess }: R
     onClose();
   };
 
-  const getLine = (lineId: string): LineDraft => lines[lineId] || { receivedQty: '', rejectedQty: '0', rejectionReason: '', batchNumber: '' };
+  const getLine = (lineId: string): LineDraft =>
+    lines[lineId] || {
+      receivedQty: '',
+      rejectedQty: '0',
+      rejectionReason: '',
+      batchNumber: '',
+      binLocation: 'BIN-A1-01',
+      manufacturingDate: '2026-09-22',
+      expiryDate: '2027-03-22'
+    };
   const setLine = (lineId: string, patch: Partial<LineDraft>) => {
     setLines((prev) => ({ ...prev, [lineId]: { ...getLine(lineId), ...patch } }));
   };
@@ -97,7 +109,10 @@ export function ReceiveGoodsModal({ isOpen, initialPoId, onClose, onSuccess }: R
               acceptedQty: received - rejected,
               rejectedQty: rejected,
               rejectionReason: draft.rejectionReason,
-              batchNumber: draft.batchNumber
+              batchNumber: draft.batchNumber,
+              manufacturingDate: draft.manufacturingDate,
+              expiryDate: draft.expiryDate,
+              binLocation: draft.binLocation
             };
           })
           .filter((l) => l.receivedQty > 0)
@@ -198,10 +213,12 @@ export function ReceiveGoodsModal({ isOpen, initialPoId, onClose, onSuccess }: R
                   <thead className="bg-canvas border-b border-line text-faint uppercase font-semibold text-2xs tracking-wider">
                     <tr>
                       <th className="px-2 py-2">Item</th>
-                      <th className="px-2 py-2 w-20 text-right">Outstanding</th>
-                      <th className="px-2 py-2 w-24 text-right">Received</th>
-                      <th className="px-2 py-2 w-24 text-right">Rejected</th>
-                      <th className="px-2 py-2 w-28">Batch #</th>
+                      <th className="px-2 py-2 w-16 text-right">Pending</th>
+                      <th className="px-2 py-2 w-20 text-right">Received</th>
+                      <th className="px-2 py-2 w-20 text-right">Rejected</th>
+                      <th className="px-2 py-2 w-24">Batch #</th>
+                      <th className="px-2 py-2 w-24">Bin</th>
+                      <th className="px-2 py-2 w-28">Expiry Date</th>
                       <th className="px-2 py-2">Rejection Reason</th>
                     </tr>
                   </thead>
@@ -219,12 +236,12 @@ export function ReceiveGoodsModal({ isOpen, initialPoId, onClose, onSuccess }: R
                             {l.description}
                             <span className="block text-2xs text-muted font-mono">{l.sku}</span>
                             {received > 0 && (
-                              <span className="mt-1 inline-flex items-center gap-1 text-2xs text-success">
+                              <span className="mt-1 inline-flex items-center gap-1 text-2xs text-success font-medium">
                                 Accepted: {accepted} {l.unit}
                               </span>
                             )}
                           </td>
-                          <td className="px-2 py-2 text-right font-mono text-muted align-top">{outstanding} {l.unit}</td>
+                          <td className="px-2 py-2 text-right font-mono text-muted align-top whitespace-nowrap">{outstanding} {l.unit}</td>
                           <td className="p-1.5 align-top">
                             <input
                               type="number"
@@ -254,8 +271,25 @@ export function ReceiveGoodsModal({ isOpen, initialPoId, onClose, onSuccess }: R
                               type="text"
                               value={draft.batchNumber}
                               onChange={(e) => setLine(l.id, { batchNumber: e.target.value })}
-                              placeholder="Optional"
+                              placeholder="LOT-..."
                               className="h-8 w-full rounded border border-line bg-canvas px-2 text-xs text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+                            />
+                          </td>
+                          <td className="p-1.5 align-top">
+                            <input
+                              type="text"
+                              value={draft.binLocation}
+                              onChange={(e) => setLine(l.id, { binLocation: e.target.value })}
+                              placeholder="BIN-A1-01"
+                              className="h-8 w-full rounded border border-line bg-canvas px-2 text-xs text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+                            />
+                          </td>
+                          <td className="p-1.5 align-top">
+                            <input
+                              type="date"
+                              value={draft.expiryDate}
+                              onChange={(e) => setLine(l.id, { expiryDate: e.target.value })}
+                              className="h-8 w-full rounded border border-line bg-canvas px-1.5 text-2xs text-ink focus:border-accent focus:outline-none"
                             />
                           </td>
                           <td className="p-1.5 align-top">

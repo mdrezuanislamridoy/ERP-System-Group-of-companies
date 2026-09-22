@@ -18,11 +18,15 @@ import type {
   ApprovalItemType,
   ApprovalNote,
   ApprovalDomain,
-  DelegationRule,
-  DelegationScope
+  ItemBatch,
+  BatchStatus,
+  StockTransferOrder,
+  StockTransferLine,
+  TransferStatus,
+  JournalEntry
 } from '../types';
 import { getCostCenterBudget, commitCostCenterEncumbrance, branchPlants } from './organization';
-import { getInvoices, approveInvoiceForPayment, rejectInvoice } from './finance';
+import { getInvoices, approveInvoiceForPayment, rejectInvoice, postJournalEntry } from './finance';
 import { recordAuditEvent } from './system';
 import { employees, getLeaveRequests, decideLeaveRequest } from './people';
 
@@ -153,13 +157,398 @@ export const suppliers: Supplier[] = [
 
 
 export let stock: StockItem[] = [
-{ id: 's1', product: 'Rice — Premium Grade (50kg)', sku: 'RM-RICE-050', warehouse: 'Savar Plant WH-01', available: 1840, reserved: 320, incoming: 500, reorder: 800, value: 11040000, status: 'active', quarantineQty: 0 },
-{ id: 's2', product: 'Edible Oil — Soybean (20L)', sku: 'RM-OIL-020', warehouse: 'Savar Plant WH-01', available: 210, reserved: 180, incoming: 200, reorder: 400, value: 3780000, status: 'low-stock', quarantineQty: 0 },
-{ id: 's3', product: 'Packaging Film — 80 micron', sku: 'PK-FILM-080', warehouse: 'Gazipur Plant II', available: 0, reserved: 0, incoming: 1200, reorder: 300, value: 0, status: 'out-of-stock', quarantineQty: 0 },
-{ id: 's4', product: 'Wheat Flour — Fine (25kg)', sku: 'RM-FLR-025', warehouse: 'Chattogram DC', available: 3120, reserved: 640, incoming: 0, reorder: 1000, value: 9360000, status: 'active', quarantineQty: 0 },
-{ id: 's5', product: 'Sugar — Refined (50kg)', sku: 'RM-SGR-050', warehouse: 'Chattogram DC', available: 640, reserved: 220, incoming: 800, reorder: 700, value: 4480000, status: 'low-stock', quarantineQty: 0 },
-{ id: 's6', product: 'Pallet — Euro Standard', sku: 'PK-PLT-EU', warehouse: 'Savar Plant WH-02', available: 890, reserved: 40, incoming: 100, reorder: 200, value: 890000, status: 'active', quarantineQty: 0 },
-{ id: 's7', product: 'Carton Box — 12×8×6', sku: 'PK-BOX-1286', warehouse: 'Gazipur Plant II', available: 12400, reserved: 3200, incoming: 5000, reorder: 6000, value: 2480000, status: 'active', quarantineQty: 0 }];
+  {
+    id: 's1',
+    product: 'Rice — Premium Grade (50kg)',
+    sku: 'RM-RICE-050',
+    warehouse: 'Savar Plant WH-01',
+    onHand: 2200,
+    reserved: 320,
+    quarantineQty: 40,
+    inTransitQty: 200,
+    atp: 1840,
+    available: 1840,
+    incoming: 500,
+    reorder: 800,
+    unit: 'Bag (50kg)',
+    unitCost: 5018,
+    value: 11039600,
+    status: 'active'
+  },
+  {
+    id: 's2',
+    product: 'Edible Oil — Soybean (20L)',
+    sku: 'RM-OIL-020',
+    warehouse: 'Savar Plant WH-01',
+    onHand: 420,
+    reserved: 180,
+    quarantineQty: 30,
+    inTransitQty: 50,
+    atp: 210,
+    available: 210,
+    incoming: 200,
+    reorder: 400,
+    unit: 'Drum (20L)',
+    unitCost: 9000,
+    value: 3780000,
+    status: 'low-stock'
+  },
+  {
+    id: 's3',
+    product: 'Packaging Film — 80 micron',
+    sku: 'PK-FILM-080',
+    warehouse: 'Gazipur Plant II',
+    onHand: 0,
+    reserved: 0,
+    quarantineQty: 0,
+    inTransitQty: 0,
+    atp: 0,
+    available: 0,
+    incoming: 1200,
+    reorder: 300,
+    unit: 'Roll',
+    unitCost: 620,
+    value: 0,
+    status: 'out-of-stock'
+  },
+  {
+    id: 's4',
+    product: 'Wheat Flour — Fine (25kg)',
+    sku: 'RM-FLR-025',
+    warehouse: 'Chattogram DC',
+    onHand: 3820,
+    reserved: 640,
+    quarantineQty: 60,
+    inTransitQty: 0,
+    atp: 3120,
+    available: 3120,
+    incoming: 0,
+    reorder: 1000,
+    unit: 'Bag (25kg)',
+    unitCost: 2450,
+    value: 9359000,
+    status: 'active'
+  },
+  {
+    id: 's5',
+    product: 'Sugar — Refined (50kg)',
+    sku: 'RM-SGR-050',
+    warehouse: 'Chattogram DC',
+    onHand: 880,
+    reserved: 220,
+    quarantineQty: 20,
+    inTransitQty: 100,
+    atp: 640,
+    available: 640,
+    incoming: 800,
+    reorder: 700,
+    unit: 'Bag (50kg)',
+    unitCost: 5090,
+    value: 4479200,
+    status: 'low-stock'
+  },
+  {
+    id: 's6',
+    product: 'Pallet — Euro Standard',
+    sku: 'PK-PLT-EU',
+    warehouse: 'Savar Plant WH-02',
+    onHand: 940,
+    reserved: 40,
+    quarantineQty: 10,
+    inTransitQty: 0,
+    atp: 890,
+    available: 890,
+    incoming: 100,
+    reorder: 200,
+    unit: 'Pallet',
+    unitCost: 946,
+    value: 889240,
+    status: 'active'
+  },
+  {
+    id: 's7',
+    product: 'Carton Box — 12×8×6',
+    sku: 'PK-BOX-1286',
+    warehouse: 'Gazipur Plant II',
+    onHand: 15800,
+    reserved: 3200,
+    quarantineQty: 200,
+    inTransitQty: 500,
+    atp: 12400,
+    available: 12400,
+    incoming: 5000,
+    reorder: 6000,
+    unit: 'Box',
+    unitCost: 157,
+    value: 2480600,
+    status: 'active'
+  }
+];
+
+export const initialBatches: ItemBatch[] = [
+  {
+    id: 'bch-01',
+    batchNumber: 'LOT-2026-RICE-01',
+    sku: 'RM-RICE-050',
+    product: 'Rice — Premium Grade (50kg)',
+    warehouse: 'Savar Plant WH-01',
+    binLocation: 'BIN-A1-04',
+    manufacturingDate: '2026-06-10',
+    expiryDate: '2026-10-15',
+    quantityAvailable: 400,
+    initialQuantity: 500,
+    qcReleaseNumber: 'QC-REL-8810',
+    status: 'active',
+    supplierName: 'Meghna Agro Farms',
+    poNumber: 'PO-2026-0001',
+    grnNumber: 'GRN-2026-0001',
+    companyName: 'ABC Foods Ltd.'
+  },
+  {
+    id: 'bch-02',
+    batchNumber: 'LOT-2026-RICE-02',
+    sku: 'RM-RICE-050',
+    product: 'Rice — Premium Grade (50kg)',
+    warehouse: 'Savar Plant WH-01',
+    binLocation: 'BIN-A1-05',
+    manufacturingDate: '2026-07-20',
+    expiryDate: '2026-11-25',
+    quantityAvailable: 800,
+    initialQuantity: 800,
+    qcReleaseNumber: 'QC-REL-8924',
+    status: 'active',
+    supplierName: 'Meghna Agro Farms',
+    poNumber: 'PO-2026-0001',
+    grnNumber: 'GRN-2026-0001',
+    companyName: 'ABC Foods Ltd.'
+  },
+  {
+    id: 'bch-03',
+    batchNumber: 'LOT-2026-RICE-03',
+    sku: 'RM-RICE-050',
+    product: 'Rice — Premium Grade (50kg)',
+    warehouse: 'Savar Plant WH-01',
+    binLocation: 'BIN-A2-01',
+    manufacturingDate: '2026-09-01',
+    expiryDate: '2027-04-30',
+    quantityAvailable: 1000,
+    initialQuantity: 1000,
+    qcReleaseNumber: 'QC-REL-9102',
+    status: 'active',
+    supplierName: 'Meghna Agro Farms',
+    companyName: 'ABC Foods Ltd.'
+  },
+  {
+    id: 'bch-04',
+    batchNumber: 'LOT-2026-OIL-01',
+    sku: 'RM-OIL-020',
+    product: 'Edible Oil — Soybean (20L)',
+    warehouse: 'Savar Plant WH-01',
+    binLocation: 'BIN-QUAR-02',
+    manufacturingDate: '2026-01-15',
+    expiryDate: '2026-09-10',
+    quantityAvailable: 30,
+    initialQuantity: 30,
+    qcReleaseNumber: 'QC-REL-7911',
+    status: 'expired',
+    supplierName: 'Padma Oil Company',
+    companyName: 'ABC Foods Ltd.'
+  },
+  {
+    id: 'bch-05',
+    batchNumber: 'LOT-2026-OIL-02',
+    sku: 'RM-OIL-020',
+    product: 'Edible Oil — Soybean (20L)',
+    warehouse: 'Savar Plant WH-01',
+    binLocation: 'BIN-B1-08',
+    manufacturingDate: '2026-08-01',
+    expiryDate: '2026-11-10',
+    quantityAvailable: 150,
+    initialQuantity: 200,
+    qcReleaseNumber: 'QC-REL-8980',
+    status: 'active',
+    supplierName: 'Padma Oil Company',
+    companyName: 'ABC Foods Ltd.'
+  },
+  {
+    id: 'bch-06',
+    batchNumber: 'LOT-2026-OIL-03',
+    sku: 'RM-OIL-020',
+    product: 'Edible Oil — Soybean (20L)',
+    warehouse: 'Savar Plant WH-01',
+    binLocation: 'BIN-B2-04',
+    manufacturingDate: '2026-09-15',
+    expiryDate: '2027-03-15',
+    quantityAvailable: 240,
+    initialQuantity: 240,
+    qcReleaseNumber: 'QC-REL-9140',
+    status: 'active',
+    supplierName: 'Padma Oil Company',
+    companyName: 'ABC Foods Ltd.'
+  },
+  {
+    id: 'bch-07',
+    batchNumber: 'LOT-2026-FLR-01',
+    sku: 'RM-FLR-025',
+    product: 'Wheat Flour — Fine (25kg)',
+    warehouse: 'Chattogram DC',
+    binLocation: 'BIN-C1-11',
+    manufacturingDate: '2026-07-01',
+    expiryDate: '2026-10-18',
+    quantityAvailable: 620,
+    initialQuantity: 800,
+    qcReleaseNumber: 'QC-REL-8890',
+    status: 'active',
+    supplierName: 'City Flour Mills Ltd.',
+    companyName: 'ABC Foods Ltd.'
+  },
+  {
+    id: 'bch-08',
+    batchNumber: 'LOT-2026-FLR-02',
+    sku: 'RM-FLR-025',
+    product: 'Wheat Flour — Fine (25kg)',
+    warehouse: 'Chattogram DC',
+    binLocation: 'BIN-C2-03',
+    manufacturingDate: '2026-08-10',
+    expiryDate: '2027-01-15',
+    quantityAvailable: 3200,
+    initialQuantity: 3200,
+    qcReleaseNumber: 'QC-REL-9040',
+    status: 'active',
+    supplierName: 'City Flour Mills Ltd.',
+    companyName: 'ABC Foods Ltd.'
+  },
+  {
+    id: 'bch-09',
+    batchNumber: 'LOT-2026-SGR-01',
+    sku: 'RM-SGR-050',
+    product: 'Sugar — Refined (50kg)',
+    warehouse: 'Chattogram DC',
+    binLocation: 'BIN-D1-06',
+    manufacturingDate: '2026-05-12',
+    expiryDate: '2026-12-30',
+    quantityAvailable: 880,
+    initialQuantity: 1000,
+    qcReleaseNumber: 'QC-REL-8750',
+    status: 'active',
+    supplierName: 'Desh Sugar Refineries',
+    companyName: 'ABC Foods Ltd.'
+  }
+];
+
+export const initialStockTransfers: StockTransferOrder[] = [
+  {
+    id: 'sto-2026-0001',
+    transferNumber: 'STO-2026-0001',
+    sourceWarehouseId: 'bp-foods-savar',
+    sourceWarehouseName: 'Savar Plant WH-01',
+    destWarehouseId: 'bp-foods-ctg-wh',
+    destWarehouseName: 'Chattogram DC',
+    companyId: 'c-foods',
+    companyName: 'ABC Foods Ltd.',
+    isInterCompany: false,
+    carrier: 'Rangs Logistics',
+    trackingNumber: 'RL-TR-90442',
+    vehicleNumber: 'DHAKA-METRO-TA-14-8821',
+    driverName: 'Rafiqul Islam',
+    driverPhone: '+880 1711-234567',
+    lines: [
+      {
+        id: 'stol-0001-1',
+        sku: 'RM-RICE-050',
+        product: 'Rice — Premium Grade (50kg)',
+        batchNumber: 'LOT-2026-RICE-01',
+        shippedQty: 200,
+        receivedQty: 0,
+        unit: 'Bag (50kg)',
+        transitVariance: 0
+      }
+    ],
+    status: 'In-Transit',
+    dispatchedAt: '2026-09-20T11:30:00Z',
+    dispatchedBy: 'Shahidul Alam',
+    createdAt: '2026-09-20T09:00:00Z',
+    createdBy: 'Shahidul Alam'
+  },
+  {
+    id: 'sto-2026-0002',
+    transferNumber: 'STO-2026-0002',
+    sourceWarehouseId: 'bp-foods-savar',
+    sourceWarehouseName: 'Savar Plant WH-01',
+    destWarehouseId: 'bp-trans-depot-n',
+    destWarehouseName: 'Narsingdi Depot',
+    companyId: 'c-foods',
+    companyName: 'ABC Foods Ltd.',
+    destCompanyId: 'c-transport',
+    destCompanyName: 'ABC Transport Ltd.',
+    isInterCompany: true,
+    carrier: 'ABC Internal Fleet',
+    trackingNumber: 'IF-2026-1082',
+    vehicleNumber: 'DHAKA-METRO-DA-11-2090',
+    driverName: 'Mohsin Kabir',
+    driverPhone: '+880 1819-876543',
+    lines: [
+      {
+        id: 'stol-0002-1',
+        sku: 'RM-OIL-020',
+        product: 'Edible Oil — Soybean (20L)',
+        batchNumber: 'LOT-2026-OIL-02',
+        shippedQty: 50,
+        receivedQty: 50,
+        unit: 'Drum (20L)',
+        transitVariance: 0
+      }
+    ],
+    status: 'Received',
+    dispatchedAt: '2026-09-17T08:00:00Z',
+    dispatchedBy: 'Shahidul Alam',
+    receivedAt: '2026-09-18T14:30:00Z',
+    receivedBy: 'Sohel Rana',
+    createdAt: '2026-09-17T07:30:00Z',
+    createdBy: 'Shahidul Alam'
+  },
+  {
+    id: 'sto-2026-0003',
+    transferNumber: 'STO-2026-0003',
+    sourceWarehouseId: 'bp-foods-gazipur',
+    sourceWarehouseName: 'Gazipur Plant II',
+    destWarehouseId: 'bp-foods-savar',
+    destWarehouseName: 'Savar Plant WH-02',
+    companyId: 'c-foods',
+    companyName: 'ABC Foods Ltd.',
+    isInterCompany: false,
+    carrier: 'Rangs Logistics',
+    trackingNumber: 'RL-TR-88190',
+    vehicleNumber: 'DHAKA-METRO-TA-18-4012',
+    driverName: 'Kamal Hossain',
+    driverPhone: '+880 1912-345678',
+    lines: [
+      {
+        id: 'stol-0003-1',
+        sku: 'PK-BOX-1286',
+        product: 'Carton Box — 12×8×6',
+        shippedQty: 500,
+        receivedQty: 480,
+        unit: 'Box',
+        transitVariance: 20
+      }
+    ],
+    status: 'Discrepancy',
+    dispatchedAt: '2026-09-16T10:00:00Z',
+    dispatchedBy: 'Shahidul Alam',
+    receivedAt: '2026-09-17T16:00:00Z',
+    receivedBy: 'Shahidul Alam',
+    incidentNotes: '20 carton boxes crushed and water damaged due to heavy rain leak in truck tarp. Driver signed shrinkage claim acknowledgement.',
+    createdAt: '2026-09-16T09:00:00Z',
+    createdBy: 'Shahidul Alam'
+  }
+];
+
+export let itemBatches: ItemBatch[] = [...initialBatches];
+export let stockTransfers: StockTransferOrder[] = initialStockTransfers.map((st) => ({
+  ...st,
+  lines: st.lines.map((l) => ({ ...l }))
+}));
 
 
 export const warehouses = [
@@ -810,6 +1199,9 @@ export function createGoodsReceiptNote(params: {
     rejectedQty: number;
     rejectionReason?: string;
     batchNumber?: string;
+    manufacturingDate?: string;
+    expiryDate?: string;
+    binLocation?: string;
   }>;
 }): { grn: GoodsReceiptNote; purchaseOrder: PurchaseOrder; rtvTickets: ReturnToVendorTicket[] } {
   const po = purchaseOrders.find((p) => p.id === params.poId);
@@ -900,20 +1292,49 @@ export function createGoodsReceiptNote(params: {
 
   // Only ACCEPTED quantity is released to Available stock; REJECTED quantity is quarantined.
   // Physical arrival (accepted + rejected) always clears the PO's Incoming figure.
+  // Updates granular stock state: onHand, atp, quarantineQty, value.
   for (const l of activeLines) {
     const poLine = po.lines.find((pl) => pl.id === l.poLineId)!;
     stock = stock.map((s) => {
       if (s.sku !== poLine.sku) return s;
-      const newAvailable = s.available + l.acceptedQty;
-      const newStatus = newAvailable <= 0 ? 'out-of-stock' : newAvailable <= s.reorder ? 'low-stock' : 'active';
+      const newOnHand = s.onHand + l.acceptedQty;
+      const newQuarantine = s.quarantineQty + l.rejectedQty;
+      const newAtp = Math.max(0, newOnHand - (s.reserved + newQuarantine));
+      const newStatus = newAtp <= 0 ? 'out-of-stock' : newAtp <= s.reorder ? 'low-stock' : 'active';
       return {
         ...s,
-        available: newAvailable,
-        quarantineQty: s.quarantineQty + l.rejectedQty,
+        onHand: newOnHand,
+        quarantineQty: newQuarantine,
+        atp: newAtp,
+        available: newAtp,
         incoming: Math.max(0, s.incoming - l.receivedQty),
+        value: newOnHand * s.unitCost,
         status: newStatus
       };
     });
+
+    // Create ItemBatch if batch details are supplied and goods accepted
+    if (l.batchNumber?.trim() && l.acceptedQty > 0) {
+      const newBatch: ItemBatch = {
+        id: `bch-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        batchNumber: l.batchNumber.trim(),
+        sku: poLine.sku,
+        product: poLine.description,
+        warehouse: params.warehouse,
+        binLocation: l.binLocation?.trim() || 'BIN-GEN-01',
+        manufacturingDate: l.manufacturingDate || now.slice(0, 10),
+        expiryDate: l.expiryDate || new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10),
+        quantityAvailable: l.acceptedQty,
+        initialQuantity: l.acceptedQty,
+        qcReleaseNumber: `QC-REL-${Math.floor(1000 + Math.random() * 9000)}`,
+        status: 'active',
+        companyName: po.companyName,
+        supplierName: po.supplierName,
+        poNumber: po.poNumber,
+        grnNumber: grn.grnNumber
+      };
+      itemBatches = [newBatch, ...itemBatches];
+    }
   }
 
   // Rejected quantity automatically raises a Return-to-Vendor ticket.
@@ -961,6 +1382,546 @@ export function setReturnToVendorStatus(rtvId: string, status: RTVStatus): Retur
   notifyInventory();
   return updated;
 }
+
+// ─── Phase 5 Issue #16: Batches & Expiry Data APIs ───────────────────────────
+
+export function getItemBatches(): ItemBatch[] {
+  return [...itemBatches];
+}
+
+export function quarantineBatch(batchId: string, reason: string, by: string): ItemBatch {
+  const batch = itemBatches.find((b) => b.id === batchId);
+  if (!batch) throw new Error('Batch not found.');
+
+  const prevStatus = batch.status;
+  const updatedBatch: ItemBatch = {
+    ...batch,
+    status: 'recalled'
+  };
+
+  itemBatches = itemBatches.map((b) => (b.id === batchId ? updatedBatch : b));
+
+  // If this batch had available quantity, move it into quarantine state on the stock item
+  if (batch.quantityAvailable > 0) {
+    stock = stock.map((s) => {
+      if (s.sku !== batch.sku || s.warehouse !== batch.warehouse) return s;
+      const newQuarantine = s.quarantineQty + batch.quantityAvailable;
+      const newAtp = Math.max(0, s.onHand - (s.reserved + newQuarantine));
+      return {
+        ...s,
+        quarantineQty: newQuarantine,
+        atp: newAtp,
+        available: newAtp
+      };
+    });
+  }
+
+  recordAuditEvent({
+    user: by,
+    action: 'BATCH_RECALL_INITIATED',
+    resource: `${batch.batchNumber} (${batch.product})`,
+    company: batch.companyName || 'ABC Foods Ltd.',
+    before: prevStatus,
+    after: `RECALLED & QUARANTINED — ${reason.trim()}`
+  });
+
+  notifyInventory();
+  return updatedBatch;
+}
+
+export function releaseBatch(batchId: string, by: string): ItemBatch {
+  const batch = itemBatches.find((b) => b.id === batchId);
+  if (!batch) throw new Error('Batch not found.');
+
+  const updatedBatch: ItemBatch = { ...batch, status: 'active' };
+  itemBatches = itemBatches.map((b) => (b.id === batchId ? updatedBatch : b));
+
+  if (batch.quantityAvailable > 0) {
+    stock = stock.map((s) => {
+      if (s.sku !== batch.sku || s.warehouse !== batch.warehouse) return s;
+      const newQuarantine = Math.max(0, s.quarantineQty - batch.quantityAvailable);
+      const newAtp = Math.max(0, s.onHand - (s.reserved + newQuarantine));
+      return {
+        ...s,
+        quarantineQty: newQuarantine,
+        atp: newAtp,
+        available: newAtp
+      };
+    });
+  }
+
+  recordAuditEvent({
+    user: by,
+    action: 'BATCH_RELEASED_TO_ACTIVE',
+    resource: `${batch.batchNumber} (${batch.product})`,
+    company: batch.companyName || 'ABC Foods Ltd.',
+    before: batch.status,
+    after: 'active — QC cleared'
+  });
+
+  notifyInventory();
+  return updatedBatch;
+}
+
+// ─── Phase 5 Issue #17: Stock Adjustment & Scrap Voucher GL Posting ──────────
+
+export function adjustStockAndWriteOff(params: {
+  stockId: string;
+  adjustmentType: 'scrap_writeoff' | 'to_quarantine' | 'from_quarantine' | 'cycle_count';
+  qty: number;
+  reason: string;
+  costCenterId?: string;
+  costCenterCode?: string;
+  expenseAccountCode?: string;
+  assetAccountCode?: string;
+  performedBy: string;
+  batchId?: string;
+}): { updatedStock: StockItem; journalEntry?: JournalEntry } {
+  const item = stock.find((s) => s.id === params.stockId);
+  if (!item) throw new Error('Stock item not found.');
+  if (params.qty <= 0) throw new Error('Adjustment quantity must be greater than zero.');
+  if (!params.reason.trim()) throw new Error('Adjustment justification is required.');
+
+  let journalEntry: JournalEntry | undefined;
+  const now = new Date().toISOString();
+
+  if (params.adjustmentType === 'scrap_writeoff') {
+    if (params.qty > item.onHand) {
+      throw new Error(`Cannot write off ${params.qty} units; physical On-Hand is only ${item.onHand}.`);
+    }
+
+    const writeOffValue = Math.round(params.qty * item.unitCost);
+    const expenseCode = params.expenseAccountCode || '5140';
+    const assetCode = params.assetAccountCode || '1130';
+
+    // Automated GL posting: Dr. Inventory Write-Off Expense / Cr. Inventory Asset
+    journalEntry = postJournalEntry({
+      date: now.slice(0, 10),
+      companyId: 'c-foods',
+      companyName: 'ABC Foods Ltd.',
+      reference: `SCRAP-${item.sku}`,
+      memo: `Damaged inventory write-off — ${params.qty} ${item.unit} of ${item.product}: ${params.reason.trim()}`,
+      type: 'adjusting',
+      createdBy: params.performedBy,
+      lines: [
+        {
+          accountCode: expenseCode,
+          accountName: 'Inventory Write-Off & Scrap Expense',
+          costCenterId: params.costCenterId || 'cc-foods-prod-001',
+          costCenterCode: params.costCenterCode || 'CC-FOODS-PROD-001',
+          debit: writeOffValue,
+          credit: 0,
+          description: `Scrap write-off: ${params.qty} ${item.unit} of ${item.sku} (${params.reason.trim()})`
+        },
+        {
+          accountCode: assetCode,
+          accountName: 'Inventory — Raw Materials',
+          costCenterId: params.costCenterId || 'cc-foods-prod-001',
+          costCenterCode: params.costCenterCode || 'CC-FOODS-PROD-001',
+          debit: 0,
+          credit: writeOffValue,
+          description: `Inventory reduction for written-off ${item.sku}`
+        }
+      ]
+    });
+
+    const newOnHand = Math.max(0, item.onHand - params.qty);
+    // If stock was quarantined, deduct from quarantine first, otherwise deduct from ATP
+    const deductFromQuarantine = Math.min(item.quarantineQty, params.qty);
+    const newQuarantine = item.quarantineQty - deductFromQuarantine;
+    const newAtp = Math.max(0, newOnHand - (item.reserved + newQuarantine));
+
+    item.onHand = newOnHand;
+    item.quarantineQty = newQuarantine;
+    item.atp = newAtp;
+    item.available = newAtp;
+    item.value = newOnHand * item.unitCost;
+    item.status = newAtp <= 0 ? 'out-of-stock' : newAtp <= item.reorder ? 'low-stock' : 'active';
+
+    if (params.batchId) {
+      const batch = itemBatches.find((b) => b.id === params.batchId);
+      if (batch) {
+        batch.quantityAvailable = Math.max(0, batch.quantityAvailable - params.qty);
+      }
+    }
+
+    recordAuditEvent({
+      user: params.performedBy,
+      action: 'STOCK_WRITE_OFF_SCRAP',
+      resource: `${item.sku} (${item.warehouse})`,
+      company: 'ABC Foods Ltd.',
+      before: `On-Hand: ${item.onHand + params.qty}`,
+      after: `On-Hand: ${item.onHand} — Scrapped ${params.qty} ${item.unit} (GL Voucher: ${journalEntry.entryNumber}, ৳${writeOffValue.toLocaleString('en-IN')})`
+    });
+  } else if (params.adjustmentType === 'to_quarantine') {
+    if (params.qty > item.atp) {
+      throw new Error(`Cannot quarantine ${params.qty} units; Available to Promise (ATP) is only ${item.atp}.`);
+    }
+    item.quarantineQty += params.qty;
+    item.atp = Math.max(0, item.onHand - (item.reserved + item.quarantineQty));
+    item.available = item.atp;
+
+    recordAuditEvent({
+      user: params.performedBy,
+      action: 'STOCK_RECLASSIFIED_TO_QUARANTINE',
+      resource: `${item.sku} (${item.warehouse})`,
+      company: 'ABC Foods Ltd.',
+      before: `Quarantine: ${item.quarantineQty - params.qty}, ATP: ${item.atp + params.qty}`,
+      after: `Quarantine: ${item.quarantineQty}, ATP: ${item.atp} — Reason: ${params.reason.trim()}`
+    });
+  } else if (params.adjustmentType === 'from_quarantine') {
+    if (params.qty > item.quarantineQty) {
+      throw new Error(`Cannot release ${params.qty} units; Quarantined count is only ${item.quarantineQty}.`);
+    }
+    item.quarantineQty -= params.qty;
+    item.atp = Math.max(0, item.onHand - (item.reserved + item.quarantineQty));
+    item.available = item.atp;
+
+    recordAuditEvent({
+      user: params.performedBy,
+      action: 'STOCK_RELEASED_FROM_QUARANTINE',
+      resource: `${item.sku} (${item.warehouse})`,
+      company: 'ABC Foods Ltd.',
+      before: `Quarantine: ${item.quarantineQty + params.qty}`,
+      after: `Quarantine: ${item.quarantineQty}, ATP: ${item.atp} — Reason: ${params.reason.trim()}`
+    });
+  } else if (params.adjustmentType === 'cycle_count') {
+    // Delta adjustment from physical inventory count
+    const newOnHand = Math.max(0, item.onHand + params.qty);
+    const newAtp = Math.max(0, newOnHand - (item.reserved + item.quarantineQty));
+    item.onHand = newOnHand;
+    item.atp = newAtp;
+    item.available = newAtp;
+    item.value = newOnHand * item.unitCost;
+
+    recordAuditEvent({
+      user: params.performedBy,
+      action: 'STOCK_CYCLE_COUNT_ADJUSTMENT',
+      resource: `${item.sku} (${item.warehouse})`,
+      company: 'ABC Foods Ltd.',
+      before: `On-Hand: ${item.onHand - params.qty}`,
+      after: `On-Hand: ${item.onHand} (delta: ${params.qty > 0 ? `+${params.qty}` : params.qty})`
+    });
+  }
+
+  stock = stock.map((s) => (s.id === item.id ? { ...item } : s));
+  notifyInventory();
+  return { updatedStock: { ...item }, journalEntry };
+}
+
+// ─── Phase 5 Issue #18: Inter-Warehouse & Inter-Company Stock Transfers ───────
+
+export function getStockTransferOrders(): StockTransferOrder[] {
+  return stockTransfers.map((st) => ({
+    ...st,
+    lines: st.lines.map((l) => ({ ...l }))
+  }));
+}
+
+let nextStoSeq = 4;
+
+export function createStockTransferOrder(data: {
+  sourceWarehouseId: string;
+  sourceWarehouseName: string;
+  destWarehouseId: string;
+  destWarehouseName: string;
+  companyId: string;
+  companyName: string;
+  destCompanyId?: string;
+  destCompanyName?: string;
+  isInterCompany: boolean;
+  carrier?: string;
+  trackingNumber?: string;
+  vehicleNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  lines: Array<{
+    sku: string;
+    product: string;
+    batchNumber?: string;
+    shippedQty: number;
+    unit: string;
+  }>;
+  dispatchImmediately?: boolean;
+  createdBy: string;
+}): StockTransferOrder {
+  if (data.sourceWarehouseName === data.destWarehouseName) {
+    throw new Error('Source warehouse and destination warehouse must be different.');
+  }
+  if (data.lines.length === 0) {
+    throw new Error('Transfer order must include at least one item.');
+  }
+
+  const now = new Date().toISOString();
+  const stoId = `sto-2026-${String(nextStoSeq++).padStart(4, '0')}`;
+  const transferNumber = `STO-2026-${String(nextStoSeq - 1).padStart(4, '0')}`;
+
+  const lines: StockTransferLine[] = data.lines.map((l, idx) => ({
+    id: `stol-${stoId.slice(-4)}-${idx + 1}`,
+    sku: l.sku,
+    product: l.product,
+    batchNumber: l.batchNumber?.trim() || undefined,
+    shippedQty: l.shippedQty,
+    receivedQty: 0,
+    unit: l.unit,
+    transitVariance: 0
+  }));
+
+  const newOrder: StockTransferOrder = {
+    id: stoId,
+    transferNumber,
+    sourceWarehouseId: data.sourceWarehouseId,
+    sourceWarehouseName: data.sourceWarehouseName,
+    destWarehouseId: data.destWarehouseId,
+    destWarehouseName: data.destWarehouseName,
+    companyId: data.companyId,
+    companyName: data.companyName,
+    destCompanyId: data.destCompanyId,
+    destCompanyName: data.destCompanyName,
+    isInterCompany: data.isInterCompany,
+    carrier: data.carrier?.trim(),
+    trackingNumber: data.trackingNumber?.trim(),
+    vehicleNumber: data.vehicleNumber?.trim(),
+    driverName: data.driverName?.trim(),
+    driverPhone: data.driverPhone?.trim(),
+    lines,
+    status: 'Draft',
+    createdAt: now,
+    createdBy: data.createdBy
+  };
+
+  stockTransfers = [newOrder, ...stockTransfers];
+
+  if (data.dispatchImmediately) {
+    return dispatchStockTransferOrder(stoId, data.createdBy);
+  }
+
+  notifyInventory();
+  return newOrder;
+}
+
+export function dispatchStockTransferOrder(stoId: string, by: string): StockTransferOrder {
+  const sto = stockTransfers.find((t) => t.id === stoId);
+  if (!sto) throw new Error('Stock transfer order not found.');
+  if (sto.status !== 'Draft') throw new Error(`Cannot dispatch transfer order in "${sto.status}" status.`);
+
+  const now = new Date().toISOString();
+  const todayStr = now.slice(0, 10);
+
+  // Validate FEFO: Cannot dispatch expired lots & cannot exceed ATP
+  for (const line of sto.lines) {
+    const stockItem = stock.find((s) => s.sku === line.sku && s.warehouse === sto.sourceWarehouseName);
+    if (!stockItem) {
+      throw new Error(`Stock not found for SKU ${line.sku} at ${sto.sourceWarehouseName}.`);
+    }
+    if (line.shippedQty > stockItem.atp) {
+      throw new Error(`Cannot dispatch ${line.shippedQty} ${line.unit} of ${line.product}; Available to Promise (ATP) at ${sto.sourceWarehouseName} is only ${stockItem.atp}.`);
+    }
+
+    if (line.batchNumber) {
+      const batch = itemBatches.find((b) => b.batchNumber === line.batchNumber);
+      if (batch) {
+        if (batch.status === 'expired' || batch.status === 'quarantined' || batch.status === 'recalled' || batch.expiryDate < todayStr) {
+          throw new Error(`FEFO Violation: Batch ${batch.batchNumber} is expired/quarantined (Expiry: ${batch.expiryDate}). Dispatch of expired lots is strictly blocked.`);
+        }
+        if (line.shippedQty > batch.quantityAvailable) {
+          throw new Error(`Batch ${batch.batchNumber} only has ${batch.quantityAvailable} available, but ${line.shippedQty} was requested.`);
+        }
+      }
+    }
+  }
+
+  // Deduct from Source Warehouse ATP/OnHand and place into In-Transit state
+  for (const line of sto.lines) {
+    stock = stock.map((s) => {
+      if (s.sku !== line.sku || s.warehouse !== sto.sourceWarehouseName) return s;
+      const newOnHand = Math.max(0, s.onHand - line.shippedQty);
+      const newInTransit = s.inTransitQty + line.shippedQty;
+      const newAtp = Math.max(0, newOnHand - (s.reserved + s.quarantineQty));
+      return {
+        ...s,
+        onHand: newOnHand,
+        inTransitQty: newInTransit,
+        atp: newAtp,
+        available: newAtp,
+        value: newOnHand * s.unitCost,
+        status: newAtp <= 0 ? 'out-of-stock' : newAtp <= s.reorder ? 'low-stock' : 'active'
+      };
+    });
+
+    if (line.batchNumber) {
+      itemBatches = itemBatches.map((b) => {
+        if (b.batchNumber !== line.batchNumber) return b;
+        return {
+          ...b,
+          quantityAvailable: Math.max(0, b.quantityAvailable - line.shippedQty)
+        };
+      });
+    }
+  }
+
+  const updated: StockTransferOrder = {
+    ...sto,
+    status: 'In-Transit',
+    dispatchedAt: now,
+    dispatchedBy: by
+  };
+
+  stockTransfers = stockTransfers.map((t) => (t.id === stoId ? updated : t));
+
+  recordAuditEvent({
+    user: by,
+    action: 'DISPATCH_STOCK_TRANSFER',
+    resource: `${sto.transferNumber} (${sto.sourceWarehouseName} → ${sto.destWarehouseName})`,
+    company: sto.companyName,
+    before: 'Draft',
+    after: `Dispatched ${sto.lines.length} item(s) via ${sto.carrier || 'Internal Fleet'} (${sto.trackingNumber || 'No tracking'})`
+  });
+
+  notifyInventory();
+  return updated;
+}
+
+export function receiveStockTransferOrder(params: {
+  stoId: string;
+  receivedBy: string;
+  lineReceipts: Array<{ lineId: string; receivedQty: number }>;
+  incidentNotes?: string;
+}): StockTransferOrder {
+  const sto = stockTransfers.find((t) => t.id === params.stoId);
+  if (!sto) throw new Error('Stock transfer order not found.');
+  if (sto.status !== 'In-Transit') throw new Error(`Cannot receive transfer order in "${sto.status}" status.`);
+
+  const now = new Date().toISOString();
+  let totalDiscrepancy = 0;
+
+  const updatedLines: StockTransferLine[] = sto.lines.map((l) => {
+    const receipt = params.lineReceipts.find((r) => r.lineId === l.id);
+    const recQty = receipt !== undefined ? receipt.receivedQty : l.shippedQty;
+    if (recQty < 0) throw new Error('Received quantity cannot be negative.');
+    if (recQty > l.shippedQty) throw new Error(`Received quantity (${recQty}) cannot exceed shipped quantity (${l.shippedQty}).`);
+
+    const variance = l.shippedQty - recQty;
+    if (variance > 0) totalDiscrepancy += variance;
+
+    return {
+      ...l,
+      receivedQty: recQty,
+      transitVariance: variance
+    };
+  });
+
+  if (totalDiscrepancy > 0 && !params.incidentNotes?.trim()) {
+    throw new Error(
+      `Discrepancy Detected: ${totalDiscrepancy} unit(s) missing or damaged in transit. A mandatory incident note is required.`
+    );
+  }
+
+  const newStatus: TransferStatus = totalDiscrepancy > 0 ? 'Discrepancy' : 'Received';
+
+  // 1. Relieve in-transit quantity from source
+  for (const l of updatedLines) {
+    stock = stock.map((s) => {
+      if (s.sku !== l.sku || s.warehouse !== sto.sourceWarehouseName) return s;
+      return {
+        ...s,
+        inTransitQty: Math.max(0, s.inTransitQty - l.shippedQty)
+      };
+    });
+
+    // 2. Add physical received stock to Destination warehouse
+    const destStock = stock.find((s) => s.sku === l.sku && s.warehouse === sto.destWarehouseName);
+    if (destStock) {
+      stock = stock.map((s) => {
+        if (s.sku !== l.sku || s.warehouse !== sto.destWarehouseName) return s;
+        const newOnHand = s.onHand + l.receivedQty;
+        const newAtp = Math.max(0, newOnHand - (s.reserved + s.quarantineQty));
+        return {
+          ...s,
+          onHand: newOnHand,
+          atp: newAtp,
+          available: newAtp,
+          value: newOnHand * s.unitCost,
+          status: newAtp <= 0 ? 'out-of-stock' : newAtp <= s.reorder ? 'low-stock' : 'active'
+        };
+      });
+    } else {
+      // Stock item didn't exist at destination warehouse; seed it
+      const srcStock = stock.find((s) => s.sku === l.sku);
+      const unitCost = srcStock?.unitCost || 1000;
+      const newStockItem: StockItem = {
+        id: `s-dest-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        product: l.product,
+        sku: l.sku,
+        warehouse: sto.destWarehouseName,
+        onHand: l.receivedQty,
+        reserved: 0,
+        quarantineQty: 0,
+        inTransitQty: 0,
+        atp: l.receivedQty,
+        available: l.receivedQty,
+        incoming: 0,
+        reorder: 200,
+        unit: l.unit,
+        unitCost,
+        value: l.receivedQty * unitCost,
+        status: l.receivedQty > 0 ? 'active' : 'out-of-stock'
+      };
+      stock = [...stock, newStockItem];
+    }
+
+    // 3. If batch was transferred, credit destination batch
+    if (l.batchNumber && l.receivedQty > 0) {
+      const srcBatch = itemBatches.find((b) => b.batchNumber === l.batchNumber);
+      const existingDestBatch = itemBatches.find(
+        (b) => b.batchNumber === l.batchNumber && b.warehouse === sto.destWarehouseName
+      );
+
+      if (existingDestBatch) {
+        existingDestBatch.quantityAvailable += l.receivedQty;
+      } else if (srcBatch) {
+        itemBatches = [
+          {
+            ...srcBatch,
+            id: `bch-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            warehouse: sto.destWarehouseName,
+            binLocation: 'BIN-DEST-01',
+            quantityAvailable: l.receivedQty,
+            initialQuantity: l.receivedQty
+          },
+          ...itemBatches
+        ];
+      }
+    }
+  }
+
+  const updated: StockTransferOrder = {
+    ...sto,
+    lines: updatedLines,
+    status: newStatus,
+    receivedAt: now,
+    receivedBy: params.receivedBy,
+    incidentNotes: params.incidentNotes?.trim() || undefined
+  };
+
+  stockTransfers = stockTransfers.map((t) => (t.id === params.stoId ? updated : t));
+
+  recordAuditEvent({
+    user: params.receivedBy,
+    action: 'RECEIVE_STOCK_TRANSFER',
+    resource: `${sto.transferNumber} received at ${sto.destWarehouseName}`,
+    company: sto.destCompanyName || sto.companyName,
+    before: 'In-Transit',
+    after:
+      newStatus === 'Discrepancy'
+        ? `Discrepancy flagged: ${totalDiscrepancy} unit(s) shrinkage — Incident: ${params.incidentNotes?.trim()}`
+        : 'Received in full (100% physically verified)'
+  });
+
+  notifyInventory();
+  return updated;
+}
+
 
 // ─── Issue #15: Approval Delegation, SLA Escalations & Timeouts ─────────────
 

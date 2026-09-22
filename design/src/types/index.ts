@@ -454,20 +454,105 @@ export interface PurchaseOrder {
   closedAt?: string;
 }
 
+// ─── Issue #16: Multi-Bin, Lot/Batch & Expiry Date Management (FEFO) ──────────
+
+export type BatchStatus = 'active' | 'quarantined' | 'recalled' | 'expired';
+
+export interface ItemBatch {
+  id: string;
+  batchNumber: string;
+  sku: string;
+  product: string;
+  warehouse: string;
+  binLocation: string;
+  manufacturingDate: string; // YYYY-MM-DD
+  expiryDate: string;        // YYYY-MM-DD
+  quantityAvailable: number;
+  initialQuantity?: number;
+  qcReleaseNumber: string;
+  status: BatchStatus;
+  companyId?: string;
+  companyName?: string;
+  supplierName?: string;
+  poNumber?: string;
+  grnNumber?: string;
+}
+
+// ─── Issue #17: Granular Stock State Machine ──────────────────────────────────
+// ATP (Available to Promise) = Physical On-Hand - (Reserved for Orders + Quarantined/Damaged)
+
 export interface StockItem {
   id: string;
   product: string;
   sku: string;
   warehouse: string;
-  available: number;
+  /** Physical units physically present in the warehouse shelves. */
+  onHand: number;
+  /** Committed to sales orders, active transfers, or production lines. */
   reserved: number;
+  /** Received but failed QC, damaged during handling, or quarantined for audit. */
+  quarantineQty: number;
+  /** Dispatched and currently in transit between warehouses/plants. */
+  inTransitQty: number;
+  /** Available to Promise: onHand - (reserved + quarantineQty). */
+  atp: number;
+  /** Backwards-compatibility alias for atp. */
+  available: number;
+  /** Expected inbound from approved/issued purchase orders. */
   incoming: number;
   reorder: number;
+  /** Unit of measure e.g. Bag, Drum, Roll, Unit */
+  unit: string;
+  /** Unit cost in BDT for inventory GL valuation. */
+  unitCost: number;
+  /** Total onHand valuation = onHand * unitCost. */
   value: number;
   status: StatusKey;
-  /** Received but failed QC — held pending Return-to-Vendor, excluded from Available. */
-  quarantineQty: number;
 }
+
+// ─── Issue #18: Inter-Warehouse & Inter-Company Stock Transfers ───────────────
+
+export type TransferStatus = 'Draft' | 'Dispatched' | 'In-Transit' | 'Received' | 'Discrepancy' | 'Cancelled';
+
+export interface StockTransferLine {
+  id: string;
+  sku: string;
+  product: string;
+  batchNumber?: string;
+  shippedQty: number;
+  receivedQty: number;
+  unit: string;
+  transitVariance: number; // shippedQty - receivedQty
+}
+
+export interface StockTransferOrder {
+  id: string;
+  transferNumber: string; // e.g. STO-2026-0001
+  sourceWarehouseId: string;
+  sourceWarehouseName: string;
+  destWarehouseId: string;
+  destWarehouseName: string;
+  companyId: string;
+  companyName: string;
+  destCompanyId?: string;
+  destCompanyName?: string;
+  isInterCompany: boolean;
+  carrier?: string;
+  trackingNumber?: string;
+  vehicleNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  lines: StockTransferLine[];
+  status: TransferStatus;
+  dispatchedAt?: string;
+  dispatchedBy?: string;
+  receivedAt?: string;
+  receivedBy?: string;
+  incidentNotes?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
 
 // ─── Issue #11: Goods Receipt Note (GRN) & QC Inspection ─────────────────────
 // A GRN records physical arrival against an issued PO; each line carries its own
