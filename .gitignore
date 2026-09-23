@@ -70,3 +70,5 @@ temp/
 **/temp/
 .cache/
 **/.cache/
+.vercel
+.env*

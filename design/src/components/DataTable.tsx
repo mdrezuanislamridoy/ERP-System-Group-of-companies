@@ -83,28 +83,6 @@ export function DataTable<T>({
   const visibleColumns = columns.filter((c) => !hidden.includes(c.key));
   const hasFilters = Object.values(active).some(Boolean) || query.length > 0;
 
-  const handleExport = () => {
-    if (onExport) {
-      onExport();
-      return;
-    }
-    const headers = visibleColumns.map((c) => `"${c.header}"`).join(',');
-    const csvRows = filtered.map((row) =>
-      visibleColumns
-        .map((c) => {
-          const val = c.value ? c.value(row) : (row as any)[c.key];
-          return `"${String(val ?? '').replace(/"/g, '""')}"`;
-        })
-        .join(',')
-    );
-    const blob = new Blob([[headers, ...csvRows].join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `inventory-export-${Date.now()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
 
   const filtered = useMemo(() => {
     let out = rows;
@@ -250,11 +228,7 @@ export function DataTable<T>({
               </div>
             }
           </div>
-<<<<<<< HEAD
           <Button variant="secondary" size="sm" icon={DownloadIcon} onClick={handleExportClick}>
-=======
-          <Button variant="secondary" size="sm" icon={DownloadIcon} onClick={handleExport}>
->>>>>>> 86343d25d3bc8825aae5a7415a6b72fb9f9ba7fa
             Export
           </Button>
           {onCreate &&
