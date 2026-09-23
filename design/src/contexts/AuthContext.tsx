@@ -40,7 +40,7 @@ interface AuthContextValue {
   /** Active ABAC scope for current assignment (allowed companies, branches, departments, approval limit) */
   scope: UserScope;
   isAuthenticated: boolean;
-  /** Validates credentials with backend (by Employee ID) or local mock directory */
+  /** Validates credentials against the local mock directory (frontend-only for now); falls back to backend if wired up later */
   login: (employeeId: string, password: string) => Promise<LoginResult>;
   /** Establishes the session for an already-validated user + chosen assignment. */
   establishSession: (userId: string, assignmentId: string) => void;
@@ -98,7 +98,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (employeeIdRaw: string, password: string): Promise<LoginResult> => {
       const cleanId = employeeIdRaw.trim();
 
-      // 1. Try real NestJS Backend API first
+      // ── Local demo directory auth (works without backend) ──────────
+      // Since the backend is not yet connected, authenticate directly
+      // against the local mock directory. This allows all test/demo
+      // accounts to work instantly.
+      const found = findUserByUserId(cleanId);
+      if (found) {
+        if (found.password && found.password !== password) {
+          return { ok: false, error: 'Invalid Employee ID or password.' };
+        }
+        if (found.status === 'suspended') {
+          return {
+            ok: false,
+            error: 'This account has been suspended by an administrator. Contact Group IT.',
+          };
+        }
+        if (found.status === 'inactive') {
+          return { ok: false, error: 'This account is inactive. Contact your HR administrator.' };
+        }
+        return { ok: true, user: found };
+      }
+
+      // ── Backend API auth (when backend is connected) ───────────────
+      // If user is not in the local directory, attempt backend login.
+      // This path will be the primary path once the backend is live.
       try {
         const res = await authApi.login({ employeeId: cleanId, password });
 
@@ -142,28 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         return { ok: true, user: mappedUser };
-      } catch (err: any) {
-        // If the backend gave a structured error (e.g. invalid credentials, account locked)
-        if (err?.error?.message) {
-          return { ok: false, error: err.error.message };
-        }
-
-        // 2. Fallback to local mock directory if backend is offline or connecting
-        const found = findUserByUserId(cleanId);
-        if (!found || (found.password && found.password !== password)) {
-          return { ok: false, error: 'Invalid Employee ID or password.' };
-        }
-        if (found.status === 'suspended') {
-          return {
-            ok: false,
-            error: 'This account has been suspended by an administrator. Contact Group IT.',
-          };
-        }
-        if (found.status === 'inactive') {
-          return { ok: false, error: 'This account is inactive. Contact your HR administrator.' };
-        }
-
-        return { ok: true, user: found };
+      } catch {
+        return { ok: false, error: 'Invalid Employee ID or password.' };
       }
     },
     [],
