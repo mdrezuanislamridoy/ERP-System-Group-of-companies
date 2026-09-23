@@ -64,6 +64,7 @@ export function DataTable<T>({
   bulkActions,
   toolbarRight,
   onRowClick,
+  onExport,
   pageSize = 8,
   loading = false,
   emptyTitle = 'No records found',
@@ -119,6 +120,27 @@ export function DataTable<T>({
     setQuery('');
     setActive({});
     setPage(0);
+  };
+
+  const handleExportClick = () => {
+    if (onExport) {
+      onExport();
+      return;
+    }
+    const exportableCols = columns.filter((c) => !hidden.includes(c.key) && (c.value || c.header));
+    if (exportableCols.length === 0) return;
+    const header = exportableCols.map((c) => `"${c.header}"`).join(',');
+    const body = filtered.map((row) =>
+      exportableCols.map((c) => `"${c.value ? String(c.value(row)).replace(/"/g, '""') : ''}"`).join(',')
+    ).join('\n');
+    const blob = new Blob([`${header}\n${body}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `table_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -205,7 +227,7 @@ export function DataTable<T>({
               </div>
             }
           </div>
-          <Button variant="secondary" size="sm" icon={DownloadIcon} onClick={onExport}>
+          <Button variant="secondary" size="sm" icon={DownloadIcon} onClick={handleExportClick}>
             Export
           </Button>
           {onCreate &&

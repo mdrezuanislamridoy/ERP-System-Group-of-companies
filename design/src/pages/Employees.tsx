@@ -6,6 +6,7 @@ import { DataTable, type Column } from '../components/DataTable';
 import { Button } from '../components/ui/Button';
 import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { SensitiveField } from '../components/common/SensitiveField';
+import { CreateEmployeeModal } from '../components/iam/CreateEmployeeModal';
 import { employees } from '../data/people';
 import { group } from '../data/organization';
 import { recordAuditEvent } from '../data/system';
@@ -18,8 +19,34 @@ export function Employees() {
   const { can, role, density } = useApp();
   const { filterEmployees, activeCompanyName, activeBranchName } = useEntityScope();
   const [exportNotice, setExportNotice] = useState<{ message: string; tone: 'info' | 'warning' } | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [employeeList, setEmployeeList] = useState<Employee[]>(employees);
 
-  const scoped = filterEmployees(employees);
+  const scoped = filterEmployees(employeeList);
+
+  const handleEmployeeCreated = (newEmp: any) => {
+    const created: Employee = {
+      id: newEmp.employeeId,
+      name: newEmp.name || `${newEmp.firstName} ${newEmp.lastName}`,
+      position: newEmp.title || 'Specialist',
+      department: newEmp.department || 'Human Resources',
+      company: activeCompanyName || 'ABC Foods Ltd',
+      branch: activeBranchName || 'Corporate HQ',
+      status: 'active',
+      email: newEmp.email,
+      phone: newEmp.phone || '+880 1700-000000',
+      joined: new Date().toISOString().split('T')[0],
+      manager: 'Executive Office',
+      grade: 'L3',
+      location: 'Dhaka',
+      baseSalary: newEmp.baseSalary || 65000,
+      bankName: newEmp.bankName,
+      bankAccount: newEmp.bankAccount,
+      nid: newEmp.nationalId,
+      tin: newEmp.taxId,
+    };
+    setEmployeeList((prev) => [created, ...prev]);
+  };
 
   const handleExport = (listToExport: Employee[] = scoped) => {
     const hasPrivilegedExport = can('sensitive.export');
@@ -158,7 +185,7 @@ export function Employees() {
         meta={<Badge tone="accent">Scope: {activeCompanyName} · {activeBranchName} ({scoped.length} people)</Badge>}
         actions={
           can('employee.update') ? (
-            <Button variant="primary" icon={PlusIcon}>
+            <Button variant="primary" icon={PlusIcon} onClick={() => setIsModalOpen(true)}>
               Add employee
             </Button>
           ) : undefined
@@ -184,6 +211,7 @@ export function Employees() {
           density={density}
           pageSize={10}
           selectable={can('employee.update')}
+          onCreate={can('employee.update') ? { label: 'Add Employee', onClick: () => setIsModalOpen(true) } : undefined}
           onExport={() => handleExport(scoped)}
           bulkActions={
             <>
@@ -230,6 +258,12 @@ export function Employees() {
           onRowClick={(e) => navigate(`/employees/${e.id}`)}
         />
       </div>
+
+      <CreateEmployeeModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleEmployeeCreated}
+      />
     </div>
   );
 }

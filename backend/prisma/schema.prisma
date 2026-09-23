@@ -1,0 +1,521 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. ORGANIZATIONAL HIERARCHY & MULTI-TENANCY
+// ==========================================
+
+enum OrgType {
+  GROUP
+  LEGAL_ENTITY
+  BUSINESS_UNIT
+  BRANCH_PLANT
+  DEPARTMENT
+  COST_CENTER
+  PROFIT_CENTER
+  WAREHOUSE
+  FACTORY
+}
+
+enum ScopeMode {
+  SELF
+  NODE
+  SUBTREE
+  SUBTREE_EXCEPT
+  CROSS
+}
+
+model Organization {
+  id              String      @id @default(uuid())
+  parentId        String?     @map("parent_id")
+  companyId       String?     @map("company_id")
+  type            OrgType     @default(DEPARTMENT)
+  code            String      @db.VarChar(64)
+  name            String      @db.VarChar(255)
+  path            String      @default("")
+  depth           Int         @default(0)
+  status          String      @default("ACTIVE")
+  currency        String?     @default("BDT") @db.VarChar(8)
+  sector          String?     @db.VarChar(128)
+  employeesCount  Int?        @default(0) @map("employees_count")
+  revenue         Decimal?    @default(0) @db.Decimal(19, 4)
+  expense         Decimal?    @default(0) @db.Decimal(19, 4)
+  margin          Decimal?    @default(0) @db.Decimal(19, 4)
+  metadata        Json?
+
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  deletedAt       DateTime?   @map("deleted_at")
+
+  parent          Organization?         @relation("OrgHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children        Organization[]        @relation("OrgHierarchy")
+  modules         CompanyModule[]
+  assignments     UserRoleAssignment[]
+  auditLogs       AuditLog[]
+
+  @@unique([parentId, code])
+  @@index([companyId, type])
+  @@index([parentId])
+  @@map("organizations")
+}
+
+model OrganizationClosure {
+  ancestorId   String   @map("ancestor_id")
+  descendantId String   @map("descendant_id")
+  depth        Int      @default(0)
+
+  @@id([ancestorId, descendantId])
+  @@index([descendantId])
+  @@map("organization_closure")
+}
+
+model CompanyModule {
+  id          String       @id @default(uuid())
+  companyId   String       @map("company_id")
+  moduleKey   String       @map("module_key") @db.VarChar(64)
+  status      String       @default("ACTIVE")
+  settings    Json?
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  company     Organization @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, moduleKey])
+  @@map("company_modules")
+}
+
+// ==========================================
+// 2. IDENTITY & ACCESS MANAGEMENT (IAM)
+// ==========================================
+
+model Person {
+  id          String       @id @default(uuid())
+  firstName   String       @map("first_name") @db.VarChar(128)
+  lastName    String       @map("last_name") @db.VarChar(128)
+  email       String       @unique @db.VarChar(255)
+  phone       String?      @db.VarChar(32)
+  nationalId  String?      @map("national_id") @db.VarChar(64)
+  taxId       String?      @map("tax_id") @db.VarChar(64)
+  baseSalary  Decimal?     @map("base_salary") @db.Decimal(19, 4)
+  bankAccount String?      @map("bank_account") @db.VarChar(64)
+  bankName    String?      @map("bank_name") @db.VarChar(128)
+  employeeNo  String?      @map("employee_no") @db.VarChar(64)
+
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  user        User?
+
+  @@map("persons")
+}
+
+model User {
+  id                 String               @id @default(uuid())
+  personId           String               @unique @map("person_id")
+  employeeId         String?              @unique @map("employee_id") @db.VarChar(64)
+  email              String               @unique @db.VarChar(255)
+  passwordHash       String               @map("password_hash")
+  mfaEnrolled        Boolean              @default(false) @map("mfa_enrolled")
+  permissionsVersion Int                  @default(1) @map("permissions_version")
+  status             String               @default("ACTIVE") // ACTIVE, SUSPENDED, INACTIVE
+  failedAttempts     Int                  @default(0) @map("failed_attempts")
+  lockedUntil        DateTime?            @map("locked_until")
+  lastLoginAt        DateTime?            @map("last_login_at")
+
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  person             Person               @relation(fields: [personId], references: [id], onDelete: Cascade)
+  assignments        UserRoleAssignment[]
+  sessions           Session[]
+  tasksAssigned      WorkflowTask[]
+
+  @@index([status])
+  @@index([employeeId])
+  @@map("users")
+}
+
+model Role {
+  id           String               @id @default(uuid())
+  ownerOrgId  String?              @map("owner_org_id")
+  key          String               @unique @db.VarChar(64)
+  name         String               @db.VarChar(128)
+  level        String               @default("COMPANY") // GROUP, COMPANY, DEPARTMENT, EMPLOYEE
+  attributes   Json?
+  isSystem     Boolean              @default(false) @map("is_system")
+  createdAt    DateTime             @default(now()) @map("created_at")
+
+  permissions  RolePermission[]
+  assignments  UserRoleAssignment[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  key         String           @unique @db.VarChar(96)
+  moduleKey   String           @map("module_key") @db.VarChar(64)
+  resource    String           @db.VarChar(64)
+  action      String           @db.VarChar(64)
+  isSensitive Boolean          @default(false) @map("is_sensitive")
+
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  conditions   Json?
+  effect       String     @default("ALLOW")
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRoleAssignment {
+  id             String       @id @default(uuid())
+  userId         String       @map("user_id")
+  roleId         String       @map("role_id")
+  organizationId String       @map("organization_id")
+  companyId      String?      @map("company_id")
+  scopeMode      ScopeMode    @default(SUBTREE) @map("scope_mode")
+  excludedOrgIds String[]     @default([]) @map("excluded_org_ids")
+  validFrom      DateTime     @default(now()) @map("valid_from")
+  validTo        DateTime?    @map("valid_to")
+  title          String?      @db.VarChar(128)
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, validTo])
+  @@index([organizationId, roleId])
+  @@map("user_role_assignments")
+}
+
+model Session {
+  id               String       @id @default(uuid())
+  userId           String       @map("user_id")
+  activeOrgId      String?      @map("active_org_id")
+  refreshTokenHash String?      @map("refresh_token_hash")
+  device           String?      @db.VarChar(255)
+  ip               String?      @db.VarChar(64)
+  expiresAt        DateTime     @map("expires_at")
+  revokedAt        DateTime?    @map("revoked_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("sessions")
+}
+
+// ==========================================
+// 3. FINANCIAL ACCOUNTING & GENERAL LEDGER
+// ==========================================
+
+model Account {
+  id             String        @id @default(uuid())
+  code           String        @db.VarChar(32)
+  name           String        @db.VarChar(160)
+  level          Int           @default(1)
+  type           String        @db.VarChar(32) // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  normalBalance  String        @default("DEBIT") @map("normal_balance") @db.VarChar(8)
+  parentCode     String?       @map("parent_code") @db.VarChar(32)
+  openingBalance Decimal       @default(0) @map("opening_balance") @db.Decimal(19, 4)
+  currentBalance Decimal       @default(0) @map("current_balance") @db.Decimal(19, 4)
+  companyId      String?       @map("company_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  journalLines   JournalLine[]
+
+  @@unique([code, companyId])
+  @@map("accounts")
+}
+
+model JournalEntry {
+  id          String        @id @default(uuid())
+  entryNumber String        @map("entry_number") @db.VarChar(64)
+  companyId   String        @map("company_id")
+  date        DateTime      @default(now())
+  type        String        @default("STANDARD") @db.VarChar(32)
+  status      String        @default("POSTED") @db.VarChar(32)
+  reference   String?       @db.VarChar(128)
+  memo        String?       @db.Text
+  totalDebit  Decimal       @default(0) @map("total_debit") @db.Decimal(19, 4)
+  totalCredit Decimal       @default(0) @map("total_credit") @db.Decimal(19, 4)
+  createdBy   String?       @map("created_by")
+  postedAt    DateTime      @default(now()) @map("posted_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  lines       JournalLine[]
+
+  @@index([companyId, date])
+  @@unique([companyId, entryNumber])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id             String       @id @default(uuid())
+  journalEntryId String       @map("journal_entry_id")
+  accountId      String       @map("account_id")
+  accountCode    String       @map("account_code") @db.VarChar(32)
+  costCenterId   String?      @map("cost_center_id")
+  debit          Decimal      @default(0) @db.Decimal(19, 4)
+  credit         Decimal      @default(0) @db.Decimal(19, 4)
+  description    String?      @db.VarChar(255)
+
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        Account      @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@map("journal_lines")
+}
+
+// ==========================================
+// 4. PROCUREMENT & SUPPLIERS
+// ==========================================
+
+model Party {
+  id          String           @id @default(uuid())
+  type        String           @db.VarChar(32) // CUSTOMER, SUPPLIER, BOTH
+  code        String           @unique @db.VarChar(64)
+  legalName   String           @map("legal_name") @db.VarChar(255)
+  taxId       String?          @map("tax_id") @db.VarChar(64)
+  status      String           @default("ACTIVE")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  orders      PurchaseOrder[]
+
+  @@map("parties")
+}
+
+model PurchaseRequest {
+  id                 String    @id @default(uuid())
+  number             String    @db.VarChar(64)
+  companyId          String    @map("company_id")
+  departmentId       String?   @map("department_id")
+  title              String    @db.VarChar(255)
+  requesterId        String?   @map("requester_id")
+  amount             Decimal   @db.Decimal(19, 4)
+  priority           String    @default("NORMAL") @db.VarChar(32) // LOW, NORMAL, HIGH, CRITICAL
+  stage              String    @default("REVIEW") @db.VarChar(64)
+  status             String    @default("PENDING") @db.VarChar(32)
+  workflowInstanceId String?   @map("workflow_instance_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@map("purchase_requests")
+}
+
+model PurchaseOrder {
+  id          String              @id @default(uuid())
+  number      String              @db.VarChar(64)
+  companyId   String              @map("company_id")
+  supplierId  String              @map("supplier_id")
+  totalAmount Decimal             @map("total_amount") @db.Decimal(19, 4)
+  currency    String              @default("BDT") @db.VarChar(8)
+  status      String              @default("DRAFT") @db.VarChar(32)
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  supplier    Party               @relation(fields: [supplierId], references: [id])
+  lines       PurchaseOrderLine[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(uuid())
+  purchaseOrderId String        @map("purchase_order_id")
+  itemDescription String        @map("item_description") @db.VarChar(255)
+  quantity        Decimal       @db.Decimal(19, 4)
+  unitPrice       Decimal       @map("unit_price") @db.Decimal(19, 4)
+  lineTotal       Decimal       @map("line_total") @db.Decimal(19, 4)
+
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_order_lines")
+}
+
+// ==========================================
+// 5. INVENTORY & STOCK LEDGER
+// ==========================================
+
+model StockItem {
+  id           String        @id @default(uuid())
+  companyId    String        @map("company_id")
+  warehouseId  String?       @map("warehouse_id")
+  sku          String        @db.VarChar(64)
+  product      String        @db.VarChar(255)
+  available    Decimal       @default(0) @db.Decimal(19, 4)
+  reserved     Decimal       @default(0) @db.Decimal(19, 4)
+  incoming     Decimal       @default(0) @db.Decimal(19, 4)
+  reorderPoint Decimal       @default(0) @map("reorder_point") @db.Decimal(19, 4)
+  unitCost     Decimal       @default(0) @map("unit_cost") @db.Decimal(19, 4)
+  totalValue   Decimal       @default(0) @map("total_value") @db.Decimal(19, 4)
+  status       String        @default("ACTIVE") @db.VarChar(32)
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  movements    StockLedger[]
+
+  @@unique([companyId, sku])
+  @@index([companyId, warehouseId])
+  @@map("stock_items")
+}
+
+model StockLedger {
+  id          String    @id @default(uuid())
+  companyId   String    @map("company_id")
+  warehouseId String    @map("warehouse_id")
+  itemId      String    @map("item_id")
+  qty         Decimal   @db.Decimal(19, 4)
+  unitCost    Decimal   @map("unit_cost") @db.Decimal(19, 4)
+  totalValue  Decimal   @map("total_value") @db.Decimal(19, 4)
+  refModule   String    @map("ref_module") @db.VarChar(64)
+  refId       String    @map("ref_id")
+  postedAt    DateTime  @default(now()) @map("posted_at")
+
+  item        StockItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, itemId, postedAt])
+  @@map("stock_ledger")
+}
+
+// ==========================================
+// 6. WORKFLOWS & APPROVAL MATRIX
+// ==========================================
+
+model WorkflowDefinition {
+  id           String             @id @default(uuid())
+  companyId    String?            @map("company_id")
+  documentType String             @map("document_type") @db.VarChar(64)
+  name         String             @db.VarChar(128)
+  status       String             @default("PUBLISHED")
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  instances    WorkflowInstance[]
+
+  @@map("workflow_definitions")
+}
+
+model WorkflowInstance {
+  id           String             @id @default(uuid())
+  definitionId String             @map("definition_id")
+  companyId    String             @map("company_id")
+  documentType String             @map("document_type") @db.VarChar(64)
+  documentId   String             @map("document_id")
+  status       String             @default("IN_PROGRESS") // IN_PROGRESS, APPROVED, REJECTED
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  definition   WorkflowDefinition @relation(fields: [definitionId], references: [id])
+  tasks        WorkflowTask[]
+
+  @@index([companyId, status])
+  @@index([documentType, documentId])
+  @@map("workflow_instances")
+}
+
+model WorkflowTask {
+  id             String           @id @default(uuid())
+  instanceId     String           @map("instance_id")
+  stepNumber     Int              @default(1) @map("step_number")
+  stepName       String           @map("step_name") @db.VarChar(128)
+  assigneeUserId String?          @map("assignee_user_id")
+  status         String           @default("PENDING") // PENDING, APPROVED, REJECTED, SKIPPED
+  comments       String?          @db.Text
+  dueAt          DateTime?        @map("due_at")
+  actionedAt     DateTime?        @map("actioned_at")
+
+  instance       WorkflowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  assignee       User?            @relation(fields: [assigneeUserId], references: [id])
+
+  @@index([assigneeUserId, status])
+  @@map("workflow_tasks")
+}
+
+// ==========================================
+// 7. PLATFORM CORE: AUDIT, NUMBERS, SETTINGS
+// ==========================================
+
+model AuditLog {
+  id             String        @id @default(uuid())
+  occurredAt     DateTime      @default(now()) @map("occurred_at")
+  actorUserId    String?       @map("actor_user_id")
+  companyId      String?       @map("company_id")
+  organizationId String?       @map("organization_id")
+  action         String        @db.VarChar(96)
+  resource       String        @db.VarChar(96)
+  resourceId     String?       @map("resource_id")
+  oldValue       Json?         @map("old_value")
+  newValue       Json?         @map("new_value")
+  ipAddress      String?       @map("ip_address") @db.VarChar(64)
+  correlationId  String?       @map("correlation_id")
+  prevHash       String?       @map("prev_hash") @db.VarChar(64)
+  rowHash        String        @map("row_hash") @db.VarChar(64)
+
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([companyId, occurredAt])
+  @@index([resource, resourceId])
+  @@index([correlationId])
+  @@map("audit_logs")
+}
+
+model NumberSequence {
+  id           String   @id @default(uuid())
+  companyId    String   @map("company_id")
+  documentType String   @map("document_type") @db.VarChar(64)
+  fiscalYear   Int      @map("fiscal_year")
+  prefix       String   @db.VarChar(32)
+  nextValue    BigInt   @default(1) @map("next_value")
+  padding      Int      @default(6)
+
+  @@unique([companyId, documentType, fiscalYear])
+  @@map("number_sequences")
+}
+
+model Setting {
+  id          String   @id @default(uuid())
+  scopeOrgId String   @map("scope_org_id")
+  key         String   @db.VarChar(128)
+  value       Json
+  dataType    String   @default("string") @map("data_type") @db.VarChar(32)
+  overridable Boolean  @default(true)
+
+  @@unique([scopeOrgId, key])
+  @@map("settings")
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  aggregateType String    @map("aggregate_type") @db.VarChar(64)
+  aggregateId   String    @map("aggregate_id")
+  eventType     String    @map("event_type") @db.VarChar(128)
+  payload       Json
+  companyId     String?   @map("company_id")
+  correlationId String?   @map("correlation_id")
+  publishedAt   DateTime? @map("published_at")
+  attempts      Int       @default(0)
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}

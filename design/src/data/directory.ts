@@ -422,7 +422,12 @@ export const directoryUsers: DirectoryUser[] = [
 }];
 
 
-export function findUserByUserId(userId: string): DirectoryUser | undefined {
-  const normalized = userId.trim().toLowerCase();
-  return directoryUsers.find((u) => u.userId.toLowerCase() === normalized);
+export function findUserByUserId(identifier: string): DirectoryUser | undefined {
+  const normalized = identifier.trim().toLowerCase();
+  return directoryUsers.find(
+    (u) =>
+      u.employeeId.toLowerCase() === normalized ||
+      u.userId.toLowerCase() === normalized ||
+      u.email.toLowerCase() === normalized,
+  );
 }

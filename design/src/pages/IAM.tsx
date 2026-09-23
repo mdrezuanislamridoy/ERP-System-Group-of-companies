@@ -12,6 +12,8 @@ import { roleTemplates } from '../data/roles';
 import { useApp } from '../contexts/AppContext';
 import { cn } from '../utils/cn';
 
+import { CreateEmployeeModal } from '../components/iam/CreateEmployeeModal';
+
 const ALL_ROLES = Object.values(roleTemplates);
 
 function companyLabel(companyId: string | null) {
@@ -29,17 +31,46 @@ const LEVEL_LABEL: Record<string, string> = {
 export function IAM() {
   const { can, companyId, companyName } = useApp();
   const [tab, setTab] = useState('users');
+  const [allUsers, setAllUsers] = useState<DirectoryUser[]>(directoryUsers);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const groupScoped = can('group.read');
+  const canProvision = groupScoped || can('iam.user.create') || can('employee.update');
+
   // A company-scoped admin (e.g. Company Admin, IT Head) manages only users with an
   // assignment inside their own company — never the rest of the group's directory.
   const scopedUsers: DirectoryUser[] = groupScoped ?
-  directoryUsers :
-  directoryUsers.filter((u) => u.assignments.some((a) => a.companyId === companyId));
+    allUsers :
+    allUsers.filter((u) => u.assignments.some((a) => a.companyId === companyId));
 
   function usersForRole(roleKey: string) {
     return scopedUsers.filter((u) => u.assignments.some((a) => a.roleKey === roleKey)).length;
   }
+
+  const handleUserCreated = (newEmp: any) => {
+    const newUser: DirectoryUser = {
+      userId: newEmp.email ? newEmp.email.split('@')[0] : newEmp.employeeId.toLowerCase(),
+      password: newEmp.initialPassword || 'Password@2026!',
+      personName: newEmp.name || `${newEmp.firstName} ${newEmp.lastName}`,
+      initials: `${(newEmp.firstName?.[0] || 'U')}${(newEmp.lastName?.[0] || 'E')}`.toUpperCase(),
+      email: newEmp.email,
+      employeeId: newEmp.employeeId,
+      department: newEmp.department || 'General',
+      branch: newEmp.branch || 'Corporate HQ',
+      status: 'active',
+      assignments: [
+        {
+          id: `asn-${Date.now()}`,
+          roleKey: newEmp.roleKey || 'employee',
+          companyId: newEmp.companyId === 'group' ? null : newEmp.companyId,
+          orgLabel: newEmp.companyId ? companyLabel(newEmp.companyId) : group.name,
+          scopeMode: newEmp.scopeMode || 'SUBTREE',
+          title: newEmp.title,
+        },
+      ],
+    };
+    setAllUsers((prev) => [newUser, ...prev]);
+  };
 
   const visibleRoles = ALL_ROLES.filter((r) => groupScoped || r.level !== 'group-exec');
 
@@ -49,16 +80,19 @@ export function IAM() {
         crumbs={[{ label: group.name, to: '/' }, { label: 'Administration' }, { label: 'Users & Roles' }]}
         title="Identity & Access"
         description={
-        groupScoped ?
-        'Users, roles and the effective permissions they resolve to in each organizational scope.' :
-        `Users, roles and permissions within ${companyName}. Other companies are not visible from this workspace.`
+          groupScoped ?
+            'Users, roles and the effective permissions they resolve to in each organizational scope.' :
+            `Users, roles and permissions within ${companyName}. Other companies are not visible from this workspace.`
         }
         meta={<Badge tone="danger">2 privileged accounts without MFA</Badge>}
         actions={
-        <Button variant="primary" icon={PlusIcon}>
-            Invite user
-          </Button>
-        } />
+          canProvision ? (
+            <Button variant="primary" icon={PlusIcon} onClick={() => setIsModalOpen(true)}>
+              Provision user
+            </Button>
+          ) : undefined
+        }
+      />
 
 
       <div className="px-6">
@@ -219,6 +253,12 @@ export function IAM() {
           </Panel>
         }
       </div>
-    </div>);
 
+      <CreateEmployeeModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleUserCreated}
+      />
+    </div>
+  );
 }
