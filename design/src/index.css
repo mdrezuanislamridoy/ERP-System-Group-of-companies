@@ -52,3 +52,28 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Issue #10: Purchase Order print/PDF view — hides all app chrome (sidebar, topbar, modal
+   backdrop) and prints only the element marked #po-print-area, regardless of DOM nesting. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #po-print-area,
+  #po-print-area * {
+    visibility: visible;
+  }
+  #po-print-area {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+  #po-print-area .po-no-print {
+    display: none !important;
+  }
+}

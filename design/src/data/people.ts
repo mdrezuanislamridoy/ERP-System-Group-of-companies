@@ -37,8 +37,52 @@ export const attendanceToday = [
 { label: 'Absent', value: 80, tone: 'danger' as const }];
 
 
-export const leaveRequests = [
-{ id: 'LV-2026-0412', employee: 'Hasan Mahmud', type: 'Annual Leave', from: '18 Sep 2026', to: '24 Sep 2026', days: 5, status: 'pending' as const },
-{ id: 'LV-2026-0409', employee: 'Farzana Yeasmin', type: 'Sick Leave', from: '16 Sep 2026', to: '17 Sep 2026', days: 2, status: 'approved' as const },
-{ id: 'LV-2026-0401', employee: 'Arif Islam', type: 'Casual Leave', from: '12 Sep 2026', to: '12 Sep 2026', days: 1, status: 'approved' as const },
-{ id: 'LV-2026-0398', employee: 'Jubayer Hossain', type: 'Unpaid Leave', from: '08 Sep 2026', to: '20 Sep 2026', days: 9, status: 'rejected' as const }];
+export const initialLeaveRequests = [
+{ id: 'LV-2026-0412', employee: 'Hasan Mahmud', type: 'Annual Leave', submittedOn: '15 Sep 2026', from: '18 Sep 2026', to: '24 Sep 2026', days: 5, status: 'pending' as const },
+{ id: 'LV-2026-0409', employee: 'Farzana Yeasmin', type: 'Sick Leave', submittedOn: '14 Sep 2026', from: '16 Sep 2026', to: '17 Sep 2026', days: 2, status: 'approved' as const },
+{ id: 'LV-2026-0401', employee: 'Arif Islam', type: 'Casual Leave', submittedOn: '10 Sep 2026', from: '12 Sep 2026', to: '12 Sep 2026', days: 1, status: 'approved' as const },
+{ id: 'LV-2026-0398', employee: 'Jubayer Hossain', type: 'Unpaid Leave', submittedOn: '05 Sep 2026', from: '08 Sep 2026', to: '20 Sep 2026', days: 9, status: 'rejected' as const },
+{ id: 'LV-2026-0415', employee: 'Sabina Yasmin', type: 'Casual Leave', submittedOn: '21 Sep 2026', from: '24 Sep 2026', to: '25 Sep 2026', days: 2, status: 'pending' as const }];
+
+export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface LeaveRequest {
+  id: string;
+  employee: string;
+  type: string;
+  /** When the request was filed — distinct from `from` (the leave's start date), and the SLA clock's basis. */
+  submittedOn: string;
+  from: string;
+  to: string;
+  days: number;
+  status: LeaveRequestStatus;
+  decidedBy?: string;
+  decidedAt?: string;
+  decisionNote?: string;
+}
+
+export let leaveRequests: LeaveRequest[] = [...initialLeaveRequests];
+const leaveListeners: Array<() => void> = [];
+
+export function getLeaveRequests(): LeaveRequest[] {
+  return [...leaveRequests];
+}
+
+export function subscribeLeaveRequests(listener: () => void): () => void {
+  leaveListeners.push(listener);
+  return () => {
+    const idx = leaveListeners.indexOf(listener);
+    if (idx !== -1) leaveListeners.splice(idx, 1);
+  };
+}
+
+export function decideLeaveRequest(id: string, decision: 'approved' | 'rejected', by: string, note?: string): LeaveRequest {
+  const request = leaveRequests.find((l) => l.id === id);
+  if (!request) throw new Error('Leave request not found.');
+  if (request.status !== 'pending') throw new Error(`This leave request is already ${request.status}.`);
+
+  const updated: LeaveRequest = { ...request, status: decision, decidedBy: by, decidedAt: new Date().toISOString(), decisionNote: note };
+  leaveRequests = leaveRequests.map((l) => (l.id === id ? updated : l));
+  leaveListeners.forEach((l) => l());
+  return updated;
+}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { EntityScopeProvider } from './contexts/EntityScopeContext';
 import { AppProvider, useApp } from './contexts/AppContext';
@@ -14,6 +14,7 @@ import { OrgChart } from './pages/OrgChart';
 import { FinanceOverview } from './pages/FinanceOverview';
 import { Invoices } from './pages/Invoices';
 import { ChartOfAccounts } from './pages/ChartOfAccounts';
+import { BankReconciliation } from './pages/BankReconciliation';
 import { Procurement } from './pages/Procurement';
 import { PurchaseRequests } from './pages/PurchaseRequests';
 import { Approvals } from './pages/Approvals';
@@ -168,6 +169,7 @@ export function App({ density = 'comfortable' }: AppProps) {
 
             <Route path="/finance" element={<Guard permission="finance.read" module="finance"><FinanceOverview /></Guard>} />
             <Route path="/finance/accounts" element={<Guard permission="finance.read" module="finance"><ChartOfAccounts /></Guard>} />
+            <Route path="/finance/bank-reconciliation" element={<Guard permission="finance.read" module="finance"><BankReconciliation /></Guard>} />
             <Route path="/finance/invoices" element={<Guard permission="invoice.read" module="finance"><Invoices /></Guard>} />
             <Route path="/reports" element={<Guard permission="reports.read" module="finance"><Reports /></Guard>} />
 

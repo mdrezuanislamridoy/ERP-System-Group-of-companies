@@ -6,10 +6,17 @@ import {
   Trash2Icon,
   XIcon,
   ScaleIcon,
+  LockIcon,
   FileSpreadsheetIcon
 } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { initialChartOfAccounts, validateJournalBalance, postJournalEntry } from '../../data/finance';
+import {
+  initialChartOfAccounts,
+  validateJournalBalance,
+  postJournalEntry,
+  getFiscalPeriodForDate,
+  isEntryTypeAllowedWhenSoftClosed
+} from '../../data/finance';
 import { companies, costCenters } from '../../data/organization';
 import { recordAuditEvent } from '../../data/system';
 import { useApp } from '../../contexts/AppContext';
@@ -80,9 +87,19 @@ export function JournalEntryModal({
     }
   ]);
 
+  const [postError, setPostError] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const targetCompany = companies.find((c) => c.id === selectedCompanyId) || companies[0];
+
+  // Fiscal period lock — live check against the selected posting date & voucher type
+  const periodForDate = getFiscalPeriodForDate(voucherDate);
+  const periodBlocksPosting = Boolean(
+    periodForDate &&
+      periodForDate.status !== 'open' &&
+      (periodForDate.status === 'hard-closed' || !isEntryTypeAllowedWhenSoftClosed(voucherType))
+  );
 
   const handleCompanyChange = (coId: string) => {
     setSelectedCompanyId(coId);
@@ -147,11 +164,12 @@ export function JournalEntryModal({
   const balanceCheck = validateJournalBalance(numericLines);
   const allLinesHaveAccount = lines.every((l) => Boolean(l.accountCode));
   const allLinesHaveCostCenter = lines.every((l) => Boolean(l.costCenterId));
-  const canSubmit = balanceCheck.balanced && allLinesHaveAccount && allLinesHaveCostCenter;
+  const canSubmit = balanceCheck.balanced && allLinesHaveAccount && allLinesHaveCostCenter && !periodBlocksPosting;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+    setPostError(null);
 
     const payloadLines = lines.map((l) => {
       const acc = postableAccounts.find((a) => a.code === l.accountCode);
@@ -167,30 +185,34 @@ export function JournalEntryModal({
       };
     });
 
-    const newVoucher = postJournalEntry({
-      date: voucherDate,
-      companyId: targetCompany.id,
-      companyName: targetCompany.name,
-      reference,
-      memo,
-      type: voucherType,
-      createdBy: role.user || 'Finance Officer',
-      lines: payloadLines
-    });
+    try {
+      const newVoucher = postJournalEntry({
+        date: voucherDate,
+        companyId: targetCompany.id,
+        companyName: targetCompany.name,
+        reference,
+        memo,
+        type: voucherType,
+        createdBy: role.user || 'Finance Officer',
+        lines: payloadLines
+      });
 
-    recordAuditEvent({
-      user: role.user || 'Finance Manager',
-      action: 'POST_JOURNAL_VOUCHER',
-      resource: `${newVoucher.entryNumber} [${newVoucher.reference}]`,
-      company: targetCompany.name,
-      before: 'Draft',
-      after: `Posted double-entry voucher of ৳${newVoucher.totalDebit.toLocaleString('en-IN')} (${newVoucher.lines.length} lines)`
-    });
+      recordAuditEvent({
+        user: role.user || 'Finance Manager',
+        action: 'POST_JOURNAL_VOUCHER',
+        resource: `${newVoucher.entryNumber} [${newVoucher.reference}]`,
+        company: targetCompany.name,
+        before: 'Draft',
+        after: `Posted double-entry voucher of ৳${newVoucher.totalDebit.toLocaleString('en-IN')} (${newVoucher.lines.length} lines)`
+      });
 
-    if (onSuccess) {
-      onSuccess(newVoucher);
+      if (onSuccess) {
+        onSuccess(newVoucher);
+      }
+      onClose();
+    } catch (err) {
+      setPostError(err instanceof Error ? err.message : 'Failed to post journal voucher.');
     }
-    onClose();
   };
 
   return (
@@ -471,6 +493,34 @@ export function JournalEntryModal({
             </div>
           </div>
 
+          {/* Fiscal Period Lock Warning */}
+          {periodForDate && periodForDate.status !== 'open' && (
+            <div
+              className={cn(
+                'flex items-start gap-2.5 rounded-xl border p-3.5',
+                periodBlocksPosting ? 'border-danger/40 bg-danger-soft/30' : 'border-warning/40 bg-warning-soft/30'
+              )}
+            >
+              <LockIcon className={cn('h-4 w-4 shrink-0 mt-0.5', periodBlocksPosting ? 'text-danger' : 'text-warning')} />
+              <p className="text-xs text-ink">
+                Fiscal period <strong>{periodForDate.label}</strong> is{' '}
+                {periodForDate.status === 'hard-closed' ? 'hard closed' : 'soft closed'}.{' '}
+                {periodForDate.status === 'hard-closed'
+                  ? 'No postings are permitted for this period.'
+                  : periodBlocksPosting
+                  ? 'Only Adjusting, Period Closing or Reversing entries may post while soft closed — change the Voucher Type above.'
+                  : 'Posting is allowed for this correction entry type while soft closed.'}
+              </p>
+            </div>
+          )}
+
+          {postError && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-danger/40 bg-danger-soft/30 p-3.5">
+              <AlertTriangleIcon className="h-4 w-4 shrink-0 text-danger mt-0.5" />
+              <p className="text-xs text-ink">{postError}</p>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex items-center justify-end gap-3 border-t border-line pt-4">
             <Button type="button" variant="secondary" onClick={onClose}>
@@ -480,7 +530,13 @@ export function JournalEntryModal({
               type="submit"
               variant="primary"
               disabled={!canSubmit}
-              title={!canSubmit ? 'Cannot post voucher: Debits and Credits must balance' : 'Post journal voucher'}
+              title={
+                periodBlocksPosting
+                  ? 'Cannot post voucher: target fiscal period is closed'
+                  : !canSubmit
+                  ? 'Cannot post voucher: Debits and Credits must balance'
+                  : 'Post journal voucher'
+              }
             >
               Post Journal Voucher
             </Button>

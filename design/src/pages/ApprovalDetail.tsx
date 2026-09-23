@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftIcon, CheckIcon, MessageSquareIcon, PaperclipIcon, XIcon } from 'lucide-react';
+import { ArrowLeftIcon, CheckIcon, ClockIcon, MessageSquareIcon, PaperclipIcon, ShieldAlertIcon, XIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel, KeyValue } from '../components/ui/Panel';
 import { Button } from '../components/ui/Button';
 import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { ApprovalTimeline } from '../components/ApprovalTimeline';
-import { approvalSteps, prItems, purchaseRequests } from '../data/operations';
+import {
+  approvalSteps,
+  prItems,
+  purchaseRequests,
+  getApprovalInbox,
+  decideApprovalItem,
+  getSlaStatus,
+  getActiveDelegationAsDelegatee
+} from '../data/operations';
 import { group } from '../data/organization';
 import { recordAuditEvent } from '../data/system';
 import { useApp } from '../contexts/AppContext';
@@ -19,8 +27,9 @@ export function ApprovalDetail() {
   const navigate = useNavigate();
   const { can, role } = useApp();
   const { canAccessCompany, canApproveAmount, scope } = useEntityScope();
-  const [decision, setDecision] = useState<'approved' | 'rejected' | 'changes' | null>(null);
   const [comment, setComment] = useState('');
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [, setRefreshTick] = useState(0);
 
   const request = purchaseRequests.find((p) => p.id === id);
   if (!request) return <NotFound />;
@@ -47,8 +56,26 @@ export function ApprovalDetail() {
   }
 
   const approvalCheck = canApproveAmount(request.amount);
-
   const total = prItems.reduce((sum, i) => sum + i.total, 0);
+
+  // The live ApprovalItem projection for this PR — undefined once it's been decided (it drops
+  // out of the pending inbox), which is exactly when we want to fall back to `request.status`.
+  const approvalItem = getApprovalInbox().find((i) => i.sourceId === request.id && (i.type === 'purchase_request' || i.type === 'budget_override'));
+  const sla = approvalItem ? getSlaStatus(approvalItem) : null;
+  const activeDelegation = getActiveDelegationAsDelegatee(role.user || '', approvalItem?.domain || 'Procurement');
+  const delegatedNote = approvalItem?.notes.find((n) => n.actingFor);
+
+  const handleDecision = (decision: 'approved' | 'rejected') => {
+    if (!approvalItem) return;
+    setDecisionError(null);
+    try {
+      decideApprovalItem(approvalItem, decision, role.user || 'Approver', comment);
+      setComment('');
+      setRefreshTick((t) => t + 1);
+    } catch (err) {
+      setDecisionError(err instanceof Error ? err.message : 'Failed to record decision.');
+    }
+  };
 
   return (
     <div className="pb-10">
@@ -64,8 +91,13 @@ export function ApprovalDetail() {
         description={request.title}
         meta={
         <>
-            <StatusBadge status={decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : request.status} />
+            <StatusBadge status={request.status} />
             <Badge tone={request.priority === 'Critical' ? 'danger' : 'warning'}>{request.priority} priority</Badge>
+            {sla && (
+              <Badge tone={sla.tone} className="inline-flex items-center gap-1">
+                <ClockIcon className="h-3 w-3" /> {sla.label}
+              </Badge>
+            )}
             <span className="text-sm text-muted">Raised {request.created}</span>
           </>
         }
@@ -74,7 +106,27 @@ export function ApprovalDetail() {
             Back to approvals
           </Button>
         } />
-      
+
+
+      {activeDelegation && request.status === 'pending' && (
+        <div className="mx-6 mt-4 flex items-center gap-2.5 rounded-lg border border-warning/30 bg-warning-soft px-4 py-2.5 text-xs font-medium text-warning shadow-sm">
+          <ShieldAlertIcon className="h-4 w-4 shrink-0" />
+          <span>
+            You are covering {activeDelegation.originalApproverName}'s approvals until {activeDelegation.endDate} — deciding this
+            will be logged as acting on their behalf.
+          </span>
+        </div>
+      )}
+
+      {delegatedNote && (
+        <div className="mx-6 mt-4 flex items-center gap-2.5 rounded-lg border border-line bg-subtle px-4 py-2.5 text-xs text-muted shadow-sm">
+          <ShieldAlertIcon className="h-4 w-4 shrink-0 text-warning" />
+          <span>
+            Decided by <strong className="text-ink">{delegatedNote.author}</strong> acting on behalf of{' '}
+            <strong className="text-ink">{delegatedNote.actingFor}</strong> on {delegatedNote.at.slice(0, 10)}.
+          </span>
+        </div>
+      )}
 
       <div className="grid gap-4 p-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="space-y-4">
@@ -83,9 +135,9 @@ export function ApprovalDetail() {
               <KeyValue label="Requested by" value={`${request.requester} · Procurement Officer`} />
               <KeyValue label="Department" value={request.department} />
               <KeyValue label="Company" value={request.company} />
-              <KeyValue label="Cost center" value="CC-PRD-014" mono />
+              <KeyValue label="Cost center" value={request.costCenterCode || 'Unbudgeted'} mono />
               <KeyValue label="Amount" value={`৳${request.amount.toLocaleString('en-IN')}`} mono />
-              <KeyValue label="Budget remaining" value="৳2,140,000 (Q4 raw material)" mono />
+              <KeyValue label="Stage" value={request.stage} />
             </dl>
             <p className="mt-3 rounded border border-line bg-canvas px-3 py-2 text-base text-muted">
               <span className="text-ink">Justification: </span>
@@ -102,7 +154,7 @@ export function ApprovalDetail() {
                   <th
                     key={h}
                     className={`px-4 py-2 text-sm font-semibold uppercase tracking-wide text-faint ${i > 1 ? 'text-right' : 'text-left'}`}>
-                    
+
                       {h}
                     </th>
                   )}
@@ -156,19 +208,12 @@ export function ApprovalDetail() {
 
           {can('pr.approve') ?
           <Panel title="Your decision">
-              {decision ?
+              {request.status !== 'pending' ?
             <div className="rounded border border-line bg-canvas px-3 py-3">
                   <p className="text-base text-ink">
-                    {decision === 'approved' ?
-                'Approved and routed to Group CFO.' :
-                decision === 'rejected' ?
-                'Rejected and returned to the requester.' :
-                'Sent back to the requester for changes.'}
+                    {request.status === 'approved' ? 'Approved.' : request.status === 'rejected' ? 'Rejected and returned to the requester.' : `Status: ${request.status}.`}
                   </p>
-                  <p className="mt-1 text-sm text-muted">Recorded 21 Sep 2026, 11:06 · audit id c-8f21b7</p>
-                  <Button className="mt-3" onClick={() => setDecision(null)}>
-                    Undo
-                  </Button>
+                  <p className="mt-1 text-sm text-muted">Stage: {request.stage}</p>
                 </div> :
 
                 <>
@@ -192,22 +237,31 @@ export function ApprovalDetail() {
                 rows={3}
                 placeholder="Add context for the next approver..."
                 className="w-full rounded border border-line bg-canvas px-2.5 py-2 text-base text-ink placeholder:text-faint focus:border-accent focus:outline-none" />
-              
+
+                  {decisionError && <p className="mt-2 text-sm text-danger">{decisionError}</p>}
+
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       variant="success"
                       size="md"
                       icon={CheckIcon}
-                      onClick={() => setDecision('approved')}
+                      onClick={() => handleDecision('approved')}
                       disabled={!approvalCheck.allowed}
                       title={!approvalCheck.allowed ? 'Amount exceeds your approval limit' : undefined}
                     >
                       Approve
                     </Button>
-                    <Button variant="danger" size="md" icon={XIcon} onClick={() => setDecision('rejected')}>
+                    <Button
+                      variant="danger"
+                      size="md"
+                      icon={XIcon}
+                      onClick={() => handleDecision('rejected')}
+                      disabled={!comment.trim()}
+                      title={!comment.trim() ? 'A comment is required to reject' : undefined}
+                    >
                       Reject
                     </Button>
-                    <Button size="md" icon={MessageSquareIcon} onClick={() => setDecision('changes')}>
+                    <Button size="md" icon={MessageSquareIcon} disabled title="Not yet wired to a workflow state — use a comment on Reject instead">
                       Request changes
                     </Button>
                   </div>

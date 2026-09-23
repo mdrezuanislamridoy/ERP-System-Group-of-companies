@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BuildingIcon,
   CheckIcon,
@@ -10,22 +10,44 @@ import {
   CalendarCheckIcon,
   ShoppingBagIcon,
   ShieldCheckIcon,
+  ShieldAlertIcon,
   TruckIcon,
   FolderKanbanIcon,
   BriefcaseIcon,
   WrenchIcon,
   CheckCircle2Icon,
-  SlidersHorizontalIcon
+  SlidersHorizontalIcon,
+  LockIcon,
+  LockKeyholeOpenIcon,
+  LaptopIcon,
+  SmartphoneIcon,
+  KeyRoundIcon,
+  TimerIcon,
 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/ui/Panel';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/StatusBadge';
 import { companies, group } from '../data/organization';
+import { getFiscalPeriods, subscribeFiscalPeriods, setFiscalPeriodStatus } from '../data/finance';
+import {
+  recordAuditEvent,
+  getActiveSessions,
+  revokeSession,
+  revokeAllOtherSessions,
+  subscribeActiveSessions,
+} from '../data/system';
+import { StepUpAuthModal } from '../components/common/StepUpAuthModal';
 import { useApp } from '../contexts/AppContext';
 import { useEntityScope } from '../contexts/EntityScopeContext';
-import { type ModuleKey, MODULE_METADATA } from '../types';
+import { type ModuleKey, type FiscalPeriodStatus, type ActiveSession, MODULE_METADATA } from '../types';
 import { cn } from '../utils/cn';
+
+const PERIOD_STATUS_META: Record<FiscalPeriodStatus, { label: string; tone: 'success' | 'warning' | 'danger' }> = {
+  open: { label: 'Open', tone: 'success' },
+  'soft-closed': { label: 'Soft Closed', tone: 'warning' },
+  'hard-closed': { label: 'Hard Closed', tone: 'danger' }
+};
 
 const GROUPS = [
   { label: 'Organization', items: ['Organization', 'Companies', 'Branches', 'Departments'] },
@@ -80,11 +102,65 @@ const PRESETS: Record<string, { label: string; modules: ModuleKey[]; hint: strin
 };
 
 export function Settings() {
-  const { companyName, can } = useApp();
+  const { companyName, can, role } = useApp();
   const { activeCompanyId, companyModules, toggleCompanyModule, setCompanyModulesPreset } = useEntityScope();
   const [section, setSection] = useState('Modules');
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(activeCompanyId || companies[0].id);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [fiscalPeriods, setFiscalPeriods] = useState(getFiscalPeriods());
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>(getActiveSessions());
+  const [stepUpConfig, setStepUpConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    action: (justification?: string) => void;
+  } | null>(null);
+
+  useEffect(() => subscribeFiscalPeriods(() => setFiscalPeriods(getFiscalPeriods())), []);
+  useEffect(() => subscribeActiveSessions(() => setActiveSessions(getActiveSessions())), []);
+
+  const handlePeriodStatusChange = (periodId: string, status: FiscalPeriodStatus) => {
+    if (!can('finance.approve')) return;
+    const period = fiscalPeriods.find((p) => p.id === periodId);
+    if (!period) return;
+
+    if (status === 'hard-closed') {
+      setStepUpConfig({
+        isOpen: true,
+        title: 'Hard-Close Accounting Period',
+        description: `Permanently locking fiscal period ${period.label}. Once hard-closed, all vouchers and ledger reversals are rejected.`,
+        action: (justification) => {
+          const updated = setFiscalPeriodStatus(periodId, status, role.user || 'Group Financial Controller');
+          recordAuditEvent({
+            user: role.user || 'Group Financial Controller',
+            action: 'HARD_CLOSE_FISCAL_PERIOD',
+            resource: updated.label,
+            company: 'ABC GROUP',
+            justificationReason: justification || 'Mandatory Fiscal Period Closing',
+            beforeState: { period: period.label, status: period.status },
+            afterState: { period: updated.label, status: updated.status, lockedAt: new Date().toISOString() },
+          });
+          setStatusMsg(`${updated.label} permanently locked (Hard Closed)`);
+          setTimeout(() => setStatusMsg(null), 3500);
+        },
+      });
+      return;
+    }
+
+    const updated = setFiscalPeriodStatus(periodId, status, role.user || 'Group Financial Controller');
+
+    recordAuditEvent({
+      user: role.user || 'Group Financial Controller',
+      action: 'SET_FISCAL_PERIOD_STATUS',
+      resource: updated.label,
+      company: 'ABC GROUP',
+      before: `${period.label}: ${PERIOD_STATUS_META[period.status].label}`,
+      after: `${updated.label}: ${PERIOD_STATUS_META[updated.status].label}`
+    });
+
+    setStatusMsg(`${updated.label} set to '${PERIOD_STATUS_META[updated.status].label}'`);
+    setTimeout(() => setStatusMsg(null), 3500);
+  };
 
   const targetCompany = companies.find((c) => c.id === selectedCompanyId) || companies[0];
   const activeModules = companyModules[targetCompany.id] || targetCompany.enabledModules;
@@ -252,7 +328,7 @@ export function Settings() {
                             {isEnabled ? (
                               <Badge tone="success">Active</Badge>
                             ) : (
-                              <Badge tone="muted">Disabled</Badge>
+                              <Badge tone="neutral">Disabled</Badge>
                             )}
                           </div>
                           <p className="text-xs text-muted mt-0.5">{meta.description}</p>
@@ -283,6 +359,200 @@ export function Settings() {
                 </ul>
               </Panel>
             </div>
+          ) : section === 'Finance' ? (
+            <div className="space-y-4">
+              <Panel
+                title="Fiscal Period Closing"
+                description="Lock monthly periods to prevent unauthorized retro-active ledger tampering. Closed periods reject new journal postings."
+                bodyClassName="p-0"
+              >
+                <ul className="divide-y divide-line">
+                  {fiscalPeriods.map((period) => {
+                    const meta = PERIOD_STATUS_META[period.status];
+                    return (
+                      <li key={period.id} className="flex flex-wrap items-center gap-3.5 px-4 py-3">
+                        <div
+                          className={cn(
+                            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border',
+                            period.status === 'open'
+                              ? 'border-line bg-canvas text-faint'
+                              : 'border-danger/30 bg-danger-soft text-danger'
+                          )}
+                        >
+                          {period.status === 'open' ? <LockKeyholeOpenIcon className="h-4 w-4" /> : <LockIcon className="h-4 w-4" />}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-ink">{period.label}</p>
+                            <Badge tone={meta.tone}>{meta.label}</Badge>
+                          </div>
+                          {period.closedBy ? (
+                            <p className="text-xs text-muted mt-0.5">
+                              Closed by {period.closedBy} · {period.closedAt}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted mt-0.5">Open for standard, adjusting and closing postings.</p>
+                          )}
+                        </div>
+
+                        <select
+                          value={period.status}
+                          onChange={(e) => handlePeriodStatusChange(period.id, e.target.value as FiscalPeriodStatus)}
+                          disabled={!can('finance.approve')}
+                          className="h-8 rounded border border-line bg-canvas px-2.5 text-xs font-medium text-ink focus:border-accent focus:outline-none disabled:opacity-50"
+                        >
+                          <option value="open">Open</option>
+                          <option value="soft-closed">Soft Closed</option>
+                          <option value="hard-closed">Hard Closed</option>
+                        </select>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Panel>
+
+              <Panel title="What each state means" bodyClassName="p-4">
+                <ul className="space-y-2 text-xs text-muted">
+                  <li><strong className="text-ink">Open</strong> — any voucher type may post.</li>
+                  <li><strong className="text-ink">Soft Closed</strong> — only Adjusting, Period Closing or Reversing entries may post; standard activity is rejected.</li>
+                  <li><strong className="text-ink">Hard Closed</strong> — no postings of any kind are accepted, including reversals.</li>
+                </ul>
+              </Panel>
+            </div>
+          ) : section === 'Security' ? (
+            <div className="space-y-4">
+              <Panel
+                title="Active Enterprise Login Sessions"
+                description="Live devices authenticated with active refresh tokens across the group."
+                actions={
+                  activeSessions.filter((s) => !s.isCurrent).length > 0 ? (
+                    <Button
+                      variant="danger"
+                      size="xs"
+                      onClick={() => {
+                        setStepUpConfig({
+                          isOpen: true,
+                          title: 'Terminate All Remote Enterprise Sessions',
+                          description: 'Revoke all concurrent active login sessions on other workstations and mobile devices.',
+                          action: () => {
+                            const curr = activeSessions.find((s) => s.isCurrent);
+                            const count = revokeAllOtherSessions(curr?.sessionId || '', role.user || 'Security Administrator');
+                            setStatusMsg(`Revoked ${count} remote session(s) across the organization.`);
+                            setTimeout(() => setStatusMsg(null), 3500);
+                          },
+                        });
+                      }}
+                    >
+                      Revoke All Remote Sessions
+                    </Button>
+                  ) : undefined
+                }
+                bodyClassName="p-0"
+              >
+                <ul className="divide-y divide-line">
+                  {activeSessions.map((s) => {
+                    const isMobile = s.device.toLowerCase().includes('iphone') || s.device.toLowerCase().includes('android');
+                    return (
+                      <li key={s.sessionId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border',
+                              s.isCurrent
+                                ? 'border-accent/30 bg-accent-soft text-accent'
+                                : 'border-line bg-canvas text-muted'
+                            )}
+                          >
+                            {isMobile ? <SmartphoneIcon className="h-4 w-4" /> : <LaptopIcon className="h-4 w-4" />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-ink">{s.device}</p>
+                              {s.isCurrent && <Badge tone="accent">Current Node</Badge>}
+                            </div>
+                            <p className="font-mono text-xs text-muted mt-0.5">
+                              {s.location} · {s.ip} · {s.browser}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <span className="block text-xs font-medium text-ink">{s.lastActive}</span>
+                            <span className="block text-2xs text-muted">Started {s.createdAt}</span>
+                          </div>
+                          {!s.isCurrent && (
+                            <Button
+                              size="xs"
+                              variant="danger"
+                              onClick={() => {
+                                revokeSession(s.sessionId, role.user || 'Security Administrator');
+                                setStatusMsg(`Terminated session on ${s.device}.`);
+                                setTimeout(() => setStatusMsg(null), 3500);
+                              }}
+                            >
+                              Terminate
+                            </Button>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Panel>
+
+              <Panel title="Enterprise Session & Authentication Policies">
+                <div className="space-y-4 text-xs">
+                  <div className="flex items-center justify-between border-b border-line pb-3">
+                    <div>
+                      <span className="font-medium text-ink block">Inactivity Auto-Logout Timeout</span>
+                      <span className="text-muted block text-2xs">Automatically suspend sessions after idle time.</span>
+                    </div>
+                    <select className="h-7 rounded border border-line bg-canvas px-2 text-xs font-medium text-ink focus:border-accent focus:outline-none">
+                      <option value="15">15 Minutes</option>
+                      <option value="30" selected>30 Minutes (Recommended)</option>
+                      <option value="60">1 Hour</option>
+                      <option value="240">4 Hours</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-line pb-3">
+                    <div>
+                      <span className="font-medium text-ink block">Max Concurrent Sessions Per User</span>
+                      <span className="text-muted block text-2xs">Limit simultaneous logins to prevent credential sharing.</span>
+                    </div>
+                    <select className="h-7 rounded border border-line bg-canvas px-2 text-xs font-medium text-ink focus:border-accent focus:outline-none">
+                      <option value="1">1 Active Device</option>
+                      <option value="2">2 Devices</option>
+                      <option value="3" selected>3 Devices (Standard)</option>
+                      <option value="unlimited">Unlimited</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-line pb-3">
+                    <div>
+                      <span className="font-medium text-ink block">Enforce Step-Up Auth for High-Risk Actions</span>
+                      <span className="text-muted block text-2xs">Requires password/TOTP re-verification before period closing or mass revocations.</span>
+                    </div>
+                    <input type="checkbox" defaultChecked className="h-4 w-4 accent-[#3B82F6]" />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-medium text-ink block">Tamper-Evident SHA-256 Audit Chaining</span>
+                      <span className="text-muted block text-2xs">Cryptographic hash chaining on all administrative and financial state changes.</span>
+                    </div>
+                    <Badge tone="success">
+                      <span className="flex items-center gap-1">
+                        <ShieldCheckIcon className="h-3 w-3" />
+                        Active & Sealed
+                      </span>
+                    </Badge>
+                  </div>
+                </div>
+              </Panel>
+            </div>
           ) : (
             <Panel title={section} description={`${section} configuration for ${companyName}`}>
               <div className="space-y-4">
@@ -304,6 +574,22 @@ export function Settings() {
           )}
         </div>
       </div>
+
+      {stepUpConfig && (
+        <StepUpAuthModal
+          isOpen={stepUpConfig.isOpen}
+          title={stepUpConfig.title}
+          actionDescription={stepUpConfig.description}
+          resourceName="Administration / Fiscal Control"
+          companyName="ABC GROUP"
+          requiredJustification={true}
+          onSuccess={(justification) => {
+            stepUpConfig.action(justification);
+            setStepUpConfig(null);
+          }}
+          onClose={() => setStepUpConfig(null)}
+        />
+      )}
     </div>
   );
 }

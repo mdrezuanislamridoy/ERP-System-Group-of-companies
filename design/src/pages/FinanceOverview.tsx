@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowRightLeftIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/ui/Panel';
 import { Metric, MetricRow } from '../components/ui/Metric';
@@ -7,8 +8,18 @@ import { Button } from '../components/ui/Button';
 import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { ColumnChart } from '../components/charts/ColumnChart';
 import { DistributionBars } from '../components/charts/DistributionBars';
-import { financeKpis, invoices, revenueTrend, formatCurrency, formatCurrencyFull, journalVouchers } from '../data/finance';
-import { companies, group } from '../data/organization';
+import {
+  financeKpis,
+  invoices,
+  revenueTrend,
+  formatCurrency,
+  formatCurrencyFull,
+  journalVouchers,
+  getFiscalPeriodForDate,
+  getBankStatements,
+  getBankReconciliationSummary
+} from '../data/finance';
+import { companies, group, getAllCostCenterBudgets } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
 import { JournalEntryModal } from '../components/finance/JournalEntryModal';
 
@@ -17,6 +28,22 @@ export function FinanceOverview() {
   const { companyId, companyName, can } = useApp();
   const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
   const [vouchers, setVouchers] = useState(journalVouchers);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const currentPeriod = getFiscalPeriodForDate(today);
+
+  const budgetSnapshots = [...getAllCostCenterBudgets(companyId)].sort((a, b) => b.utilizationPct - a.utilizationPct);
+  const overBudgetCount = budgetSnapshots.filter((b) => b.utilizationPct > 100).length;
+
+  const bankStatements = getBankStatements();
+  const scopedBankStatement =
+    (can('group.read') || !companyId || companyId === '*' || companyId === 'all'
+      ? bankStatements
+      : bankStatements.filter(
+          (s) => s.companyId === companyId || s.companyId === companyId.replace(/^c-/, 'le-') || s.companyId === companyId.replace(/^le-/, 'c-')
+        )
+    )[0];
+  const bankSummary = scopedBankStatement ? getBankReconciliationSummary(scopedBankStatement.id) : null;
 
   const scopeName = companyId ? companies.find((c) => c.id === companyId)?.name : null;
   const scopedInvoices = can('group.read') || !scopeName ? invoices : invoices.filter((i) => i.company === scopeName);
@@ -38,10 +65,28 @@ export function FinanceOverview() {
         crumbs={[{ label: group.name, to: '/' }, { label: companyName }, { label: 'Finance' }, { label: 'Overview' }]}
         title="Finance Overview"
         description="Cash, receivables, payables and budget consumption for the current context."
-        meta={<Badge tone="accent">Context: {companyName}</Badge>}
+        meta={
+          <div className="flex items-center gap-2">
+            <Badge tone="accent">Context: {companyName}</Badge>
+            {currentPeriod && currentPeriod.status !== 'open' && (
+              <Badge
+                tone={currentPeriod.status === 'hard-closed' ? 'danger' : 'warning'}
+                className="inline-flex items-center gap-1"
+              >
+                🔒 {currentPeriod.label}: {currentPeriod.status === 'hard-closed' ? 'Hard Closed' : 'Soft Closed'}
+              </Badge>
+            )}
+          </div>
+        }
         actions={
           <>
             <Button onClick={() => navigate('/finance/accounts')}>General Ledger & Accounts</Button>
+            <Button variant="secondary" onClick={() => navigate('/reports?report=Consolidated+P%26L')}>
+              Consolidation Workbench
+            </Button>
+            <Button variant="secondary" onClick={() => navigate('/finance/bank-reconciliation')}>
+              Bank Reconciliation
+            </Button>
             <Button variant="secondary" onClick={() => setIsJournalModalOpen(true)}>
               + New Journal Voucher
             </Button>
@@ -55,6 +100,26 @@ export function FinanceOverview() {
       
 
       <div className="space-y-4 p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent-soft/20 p-3.5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
+              <ArrowRightLeftIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-ink">Group Financial Consolidation Active</span>
+                <Badge tone="success" className="text-2xs">IFRS 10 Compliant</Badge>
+              </div>
+              <p className="text-xs text-muted">
+                ৳7.10 Cr in internal sister-concern sales and procurement balances automatically eliminated from group revenue and liabilities.
+              </p>
+            </div>
+          </div>
+          <Button size="xs" variant="primary" onClick={() => navigate('/reports?report=Consolidated+P%26L')}>
+            View Consolidation Workbench →
+          </Button>
+        </div>
+
         <MetricRow>
           {financeKpis.map((k, i) =>
           <Metric key={k.label} {...k} emphasis={i === 0} />
@@ -114,30 +179,80 @@ export function FinanceOverview() {
             <Panel title="Receivables ageing" description="৳ lakh outstanding">
               <DistributionBars data={ageing} />
             </Panel>
-            <Panel title="Budget utilization" description="Q3 FY2026 by cost center" bodyClassName="p-4">
+            <Panel
+              title="Budget utilization"
+              description={`FY2026 by cost center · Consumed + Committed against Allocated${overBudgetCount > 0 ? ` · ${overBudgetCount} over budget` : ''}`}
+              actions={
+                <Button variant="ghost" size="xs" onClick={() => navigate('/procurement/requests')}>
+                  Purchase Requests →
+                </Button>
+              }
+              bodyClassName="p-4"
+            >
               <ul className="space-y-3">
-                {[
-                { label: 'Production', used: 82 },
-                { label: 'Logistics', used: 64 },
-                { label: 'Sales & Marketing', used: 91 },
-                { label: 'IT & Systems', used: 47 },
-                { label: 'Admin', used: 58 }].
-                map((b) =>
-                <li key={b.label}>
-                    <div className="mb-1 flex items-center justify-between text-base">
-                      <span className="text-muted">{b.label}</span>
-                      <span className="font-mono tabular text-ink">{b.used}%</span>
-                    </div>
-                    <span className="block h-1.5 rounded-sm bg-surface" aria-hidden>
-                      <span
-                      className={`block h-1.5 rounded-sm ${b.used > 85 ? 'bg-danger' : b.used > 70 ? 'bg-warning' : 'bg-accent/70'}`}
-                      style={{ width: `${b.used}%` }} />
-                    
-                    </span>
-                  </li>
+                {budgetSnapshots.map((b) => {
+                  const used = Math.max(0, Math.min(100, b.utilizationPct));
+                  const isOver = b.utilizationPct > 100;
+                  return (
+                    <li key={b.costCenterId}>
+                      <div className="mb-1 flex items-center justify-between text-base">
+                        <span className="text-muted truncate pr-2">{b.costCenterName}</span>
+                        <span className={`font-mono tabular ${isOver ? 'text-danger font-semibold' : 'text-ink'}`}>
+                          {b.utilizationPct.toFixed(0)}%
+                        </span>
+                      </div>
+                      <span className="block h-1.5 rounded-sm bg-surface" aria-hidden>
+                        <span
+                          className={`block h-1.5 rounded-sm ${isOver ? 'bg-danger' : used > 85 ? 'bg-warning' : 'bg-accent/70'}`}
+                          style={{ width: `${used}%` }}
+                        />
+                      </span>
+                    </li>
+                  );
+                })}
+                {budgetSnapshots.length === 0 && (
+                  <li className="text-sm text-muted">No cost centers in the current scope.</li>
                 )}
               </ul>
             </Panel>
+
+            {bankSummary && scopedBankStatement && (
+              <Panel
+                title="Bank Reconciliation"
+                description={`${scopedBankStatement.bankName} ${scopedBankStatement.accountNumberMasked} · ${scopedBankStatement.periodLabel}`}
+                actions={
+                  <Button variant="ghost" size="xs" onClick={() => navigate('/finance/bank-reconciliation')}>
+                    Reconcile →
+                  </Button>
+                }
+                bodyClassName="p-4"
+              >
+                <div className="space-y-2.5 text-base">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted">Statement balance</span>
+                    <span className="font-mono tabular text-ink">{formatCurrencyFull(bankSummary.statementBalance)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted">Ledger (GL) balance</span>
+                    <span className="font-mono tabular text-ink">{formatCurrencyFull(bankSummary.ledgerBalance)}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-line pt-2.5">
+                    <span className="text-muted">Unmatched difference</span>
+                    <span
+                      className={`font-mono tabular font-semibold ${
+                        Math.abs(bankSummary.unmatchedDifference) < 0.01 ? 'text-success' : 'text-danger'
+                      }`}
+                    >
+                      {formatCurrencyFull(bankSummary.unmatchedDifference)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted">
+                    {bankSummary.unmatchedStatementCount} statement line(s) and {bankSummary.unmatchedLedgerCount} GL
+                    posting(s) awaiting reconciliation.
+                  </p>
+                </div>
+              </Panel>
+            )}
           </div>
         </div>
 
@@ -205,7 +320,7 @@ export function FinanceOverview() {
                       {formatCurrencyFull(v.totalCredit)}
                     </td>
                     <td className="px-4 py-2.5">
-                      <Badge tone={v.status === 'posted' ? 'success' : 'warning'}>
+                      <Badge tone={v.status === 'posted' ? 'success' : v.status === 'reversed' ? 'danger' : 'warning'}>
                         {v.status.toUpperCase()}
                       </Badge>
                     </td>
