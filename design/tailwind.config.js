@@ -1,5 +1,10 @@
 /** @type {import('tailwindcss').Config} */
+function themeColor(name) {
+  return `rgb(var(--color-${name}) / <alpha-value>)`;
+}
+
 export default {
+  darkMode: 'class',
   content: [
   './index.html',
   './src/**/*.{js,ts,jsx,tsx}'
@@ -7,24 +12,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        canvas: '#0D1117',
-        subtle: '#161B22',
-        surface: '#1C2128',
-        elevated: '#22282F',
-        line: '#30363D',
-        'line-strong': '#3D444D',
-        ink: '#F0F6FC',
-        muted: '#8B949E',
-        faint: '#6E7681',
+        canvas: themeColor('canvas'),
+        subtle: themeColor('subtle'),
+        surface: themeColor('surface'),
+        elevated: themeColor('elevated'),
+        line: themeColor('line'),
+        'line-strong': themeColor('line-strong'),
+        ink: themeColor('ink'),
+        muted: themeColor('muted'),
+        faint: themeColor('faint'),
         accent: {
-          DEFAULT: '#4A6B82',
-          hover: '#3E5C72',
-          soft: '#141E26',
+          DEFAULT: themeColor('accent'),
+          hover: themeColor('accent-hover'),
+          soft: themeColor('accent-soft'),
         },
-        success: { DEFAULT: '#2EA043', soft: '#102316' },
-        warning: { DEFAULT: '#A37113', soft: '#221D12' },
-        danger: { DEFAULT: '#CF222E', soft: '#251617' },
-        info: { DEFAULT: '#587B94', soft: '#141E26' },
+        success: { DEFAULT: themeColor('success'), soft: themeColor('success-soft') },
+        warning: { DEFAULT: themeColor('warning'), soft: themeColor('warning-soft') },
+        danger: { DEFAULT: themeColor('danger'), soft: themeColor('danger-soft') },
+        info: { DEFAULT: themeColor('info'), soft: themeColor('info-soft') },
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
@@ -48,7 +53,7 @@ export default {
         xl: '8px',
       },
       boxShadow: {
-        pop: '0 12px 32px -8px rgba(1,4,9,0.85), 0 0 0 1px #30363D',
+        pop: 'var(--shadow-pop)',
       },
     },
   },
