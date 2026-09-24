@@ -6,13 +6,16 @@ import {
   ChevronDownIcon,
   LogOutIcon,
   MenuIcon,
+  MoonIcon,
   SearchIcon,
   ShieldIcon,
+  SunIcon,
   UserIcon } from
 'lucide-react';
 import { cn } from '../../utils/cn';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { ContextSwitcher } from './ContextSwitcher';
 import { notifications } from '../../data/system';
 import { roleTemplates } from '../../data/roles';
@@ -20,6 +23,7 @@ import { roleTemplates } from '../../data/roles';
 export function TopBar({ onMenu }: {onMenu: () => void;}) {
   const { role, setPaletteOpen, setNotificationsOpen, assignments, activeAssignmentId, switchAssignment } = useApp();
   const { logout } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -90,6 +94,18 @@ export function TopBar({ onMenu }: {onMenu: () => void;}) {
               {unread}
             </span>
           }
+        </button>
+
+        <button
+          onClick={toggleTheme}
+          className="rounded p-1.5 text-muted transition-colors duration-100 ease-out hover:bg-surface hover:text-ink"
+          aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+          {resolvedTheme === 'dark' ? (
+            <SunIcon className="h-4 w-4 text-warning" aria-hidden />
+          ) : (
+            <MoonIcon className="h-4 w-4" aria-hidden />
+          )}
         </button>
 
         <div className="relative" ref={ref}>
