@@ -11,9 +11,9 @@ function getSystemTheme(): ResolvedTheme {
 }
 
 function getStoredPreference(): ThemePreference {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'light';
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'light';
 }
 
 function applyResolvedTheme(theme: ResolvedTheme) {

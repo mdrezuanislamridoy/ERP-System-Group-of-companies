@@ -93,7 +93,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           cn(
             'group flex items-center gap-2 rounded px-2 py-1.5 text-base transition-colors duration-100 ease-out',
             active ?
-            'bg-surface font-medium text-ink shadow-[inset_2px_0_0_0_#8B949E]' :
+            'bg-surface font-medium text-ink shadow-[inset_2px_0_0_0_rgb(var(--color-accent))]' :
             'text-muted hover:bg-surface hover:text-ink'
           )
           }>

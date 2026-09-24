@@ -78,7 +78,7 @@ function VisualBuilderTab() {
         <ol
           className="mx-auto flex max-w-md flex-col items-stretch"
           style={{
-            backgroundImage: 'radial-gradient(#30363D 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(rgb(var(--color-line)) 1px, transparent 1px)',
             backgroundSize: '16px 16px'
           }}>
 

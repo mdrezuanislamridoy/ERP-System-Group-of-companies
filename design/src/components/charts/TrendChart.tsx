@@ -24,10 +24,10 @@ export function TrendChart({ data, label }: {data: Point[];label: string;}) {
       <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-24 w-full" role="img" aria-label={label}>
         <polyline
           points={`0,${h} ${points.join(' ')} ${w},${h}`}
-          fill="rgba(74,107,130,0.10)"
+          fill="rgb(var(--color-accent) / 0.1)"
           stroke="none" />
-        
-        <polyline points={points.join(' ')} fill="none" stroke="#4A6B82" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+
+        <polyline points={points.join(' ')} fill="none" stroke="rgb(var(--color-accent))" strokeWidth="1" vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="mt-1 flex justify-between text-xs text-faint">
         {data.map((d) =>
