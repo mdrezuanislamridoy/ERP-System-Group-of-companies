@@ -49,6 +49,8 @@ export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected';
 export interface LeaveRequest {
   id: string;
   employee: string;
+  employeeId?: string;
+  company?: string;
   type: string;
   /** When the request was filed — distinct from `from` (the leave's start date), and the SLA clock's basis. */
   submittedOn: string;
@@ -56,6 +58,8 @@ export interface LeaveRequest {
   to: string;
   days: number;
   status: LeaveRequestStatus;
+  backupPerson?: string;
+  reason?: string;
   decidedBy?: string;
   decidedAt?: string;
   decisionNote?: string;
@@ -76,6 +80,48 @@ export function subscribeLeaveRequests(listener: () => void): () => void {
   };
 }
 
+let nextLeaveSeq = 416;
+
+export function createLeaveRequest(params: {
+  employee: string;
+  employeeId?: string;
+  company?: string;
+  type: string;
+  from: string;
+  to: string;
+  days: number;
+  backupPerson?: string;
+  reason?: string;
+}): LeaveRequest {
+  if (!params.employee) throw new Error('Employee name is required.');
+  if (!params.type) throw new Error('Leave type is required.');
+  if (!params.from || !params.to) throw new Error('Leave date range is required.');
+  if (params.days <= 0) throw new Error('Leave duration must be at least 1 day.');
+
+  const newId = `LV-2026-0${nextLeaveSeq++}`;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  const newReq: LeaveRequest = {
+    id: newId,
+    employee: params.employee,
+    employeeId: params.employeeId || 'EMP-10241',
+    company: params.company || 'ABC Foods Ltd.',
+    type: params.type,
+    submittedOn: dateStr,
+    from: params.from,
+    to: params.to,
+    days: params.days,
+    status: 'pending',
+    backupPerson: params.backupPerson,
+    reason: params.reason
+  };
+
+  leaveRequests = [newReq, ...leaveRequests];
+  leaveListeners.forEach((l) => l());
+  return newReq;
+}
+
 export function decideLeaveRequest(id: string, decision: 'approved' | 'rejected', by: string, note?: string): LeaveRequest {
   const request = leaveRequests.find((l) => l.id === id);
   if (!request) throw new Error('Leave request not found.');
@@ -85,4 +131,4 @@ export function decideLeaveRequest(id: string, decision: 'approved' | 'rejected'
   leaveRequests = leaveRequests.map((l) => (l.id === id ? updated : l));
   leaveListeners.forEach((l) => l());
   return updated;
-}
+}

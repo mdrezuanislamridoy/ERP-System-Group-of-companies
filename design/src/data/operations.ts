@@ -33,7 +33,15 @@ import type {
 import { getCostCenterBudget, commitCostCenterEncumbrance, branchPlants } from './organization';
 import { getInvoices, approveInvoiceForPayment, rejectInvoice, postJournalEntry, createMirroredInterCompanyInvoices } from './finance';
 import { recordAuditEvent } from './system';
-import { employees, getLeaveRequests, decideLeaveRequest } from './people';
+import { employees, getLeaveRequests, decideLeaveRequest, subscribeLeaveRequests } from './people';
+import {
+  getExpenseClaims,
+  decideExpenseClaim,
+  getRegularizations,
+  decideRegularization,
+  subscribeExpenseClaims,
+  subscribeRegularizations
+} from './employeeWorkflows';
 
 export const initialPurchaseRequests: PurchaseRequest[] = [
 { id: 'PR-2026-00192', title: 'Raw material procurement — Q4 rice & edible oil', requester: 'Imran Hossain', department: 'Production', company: 'ABC Foods Ltd.', amount: 850000, created: '20 Sep 2026', stage: 'Finance Manager', status: 'pending', priority: 'High', costCenterId: 'cc-foods-proc-001', costCenterCode: 'CC-FOODS-PROC-001' },
@@ -2314,6 +2322,11 @@ function notifyApprovalInbox(): void {
   approvalInboxListeners.forEach((l) => l());
 }
 
+// Subscribe to employee workflow changes to keep inbox in sync
+subscribeLeaveRequests(notifyApprovalInbox);
+subscribeExpenseClaims(notifyApprovalInbox);
+subscribeRegularizations(notifyApprovalInbox);
+
 // Escalation state persists across getApprovalInbox() calls (keyed by ApprovalItem.id) so an
 // already-escalated item isn't re-escalated (and re-audited) on every refresh.
 const escalationStore: Record<string, { escalatedAt: string; escalatedTo: string }> = {};
@@ -2473,6 +2486,57 @@ export function getApprovalInbox(): ApprovalItem[] {
     });
   }
 
+  for (const exp of getExpenseClaims()) {
+    if (exp.status !== 'pending') continue;
+    items.push({
+      id: `expense_claim-${exp.id}`,
+      type: 'expense_claim',
+      domain: 'Finance',
+      sourceId: exp.id,
+      title: `${exp.claimNumber} · ${exp.title}`,
+      subtitle: `${exp.category} · ${exp.costCenter} · ${exp.description.length > 60 ? exp.description.slice(0, 60) + '...' : exp.description}`,
+      requester: exp.employeeName,
+      company: exp.company,
+      department: exp.department,
+      amount: exp.amount,
+      priority: exp.amount >= 20000 ? 'High' : 'Normal',
+      status: 'pending',
+      createdAt: exp.submittedAt.slice(0, 10),
+      stage: 'Awaiting finance approval',
+      bulkEligible: exp.amount < 15000,
+      history: [{ label: 'Submitted', actor: exp.employeeName, state: 'done', time: exp.submittedAt.slice(0, 10) }],
+      notes: getApprovalNotesFor('expense_claim', exp.id),
+      submittedAt: exp.submittedAt,
+      slaHours: APPROVAL_SLA_HOURS,
+      escalated: false
+    });
+  }
+
+  for (const reg of getRegularizations()) {
+    if (reg.status !== 'pending') continue;
+    items.push({
+      id: `regularization_request-${reg.id}`,
+      type: 'regularization_request',
+      domain: 'HR',
+      sourceId: reg.id,
+      title: `${reg.requestType} — ${reg.employeeName}`,
+      subtitle: `Date: ${reg.date} · ${reg.reason.length > 60 ? reg.reason.slice(0, 60) + '...' : reg.reason}`,
+      requester: reg.employeeName,
+      company: reg.company,
+      department: reg.department,
+      priority: 'Normal',
+      status: 'pending',
+      createdAt: reg.submittedAt.slice(0, 10),
+      stage: 'Awaiting HR verification',
+      bulkEligible: true,
+      history: [{ label: 'Submitted', actor: reg.employeeName, state: 'done', time: reg.submittedAt.slice(0, 10) }],
+      notes: getApprovalNotesFor('regularization_request', reg.id),
+      submittedAt: reg.submittedAt,
+      slaHours: APPROVAL_SLA_HOURS,
+      escalated: false
+    });
+  }
+
   return items.map(withSlaEscalation).sort((a, b) => PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority]);
 }
 
@@ -2492,6 +2556,12 @@ export function decideApprovalItem(item: ApprovalItem, decision: 'approved' | 'r
       break;
     case 'leave_application':
       decideLeaveRequest(item.sourceId, decision, by, comment);
+      break;
+    case 'expense_claim':
+      decideExpenseClaim(item.sourceId, decision, by, comment);
+      break;
+    case 'regularization_request':
+      decideRegularization(item.sourceId, decision, by, comment);
       break;
     case 'journal_entry':
     default:

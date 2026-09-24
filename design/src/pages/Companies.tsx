@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronDownIcon,
@@ -10,6 +10,7 @@ import {
   SearchIcon,
   SlidersIcon,
   WarehouseIcon,
+  RefreshCwIcon,
 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/ui/Button';
@@ -29,6 +30,7 @@ import type { BranchPlant, BusinessUnit, CostCenter, LegalEntity, StatusKey } fr
 import { CreateCompanyModal } from '../components/organization/CreateCompanyModal';
 import { ManageCompanyModal } from '../components/organization/ManageCompanyModal';
 import { CreateOrgUnitModal, type OrgUnitType } from '../components/organization/CreateOrgUnitModal';
+import { orgApi } from '../api/client';
 
 // ─── MODULE display label map ─────────────────────────────────────────────────
 const MODULE_LABEL: Record<string, string> = {
@@ -413,6 +415,56 @@ export function Companies() {
   const [busList, setBusList] = useState<BusinessUnit[]>(initialBusinessUnits);
   const [bpsList, setBpsList] = useState<BranchPlant[]>(initialBranchPlants);
   const [ccsList, setCcsList] = useState<CostCenter[]>(initialCostCenters);
+  const [isLoadingApi, setIsLoadingApi] = useState(false);
+  const [apiConnected, setApiConnected] = useState(false);
+
+  const fetchBackendCompanies = async () => {
+    try {
+      setIsLoadingApi(true);
+      const res = await orgApi.getCompanies();
+      if (Array.isArray(res) && res.length > 0) {
+        setApiConnected(true);
+        setEntities((prev) => {
+          const map = new Map<string, LegalEntity>(prev.map((e) => [e.id, e]));
+          for (const item of res) {
+            const id = item.id || `c-${(item.code || '').toLowerCase()}`;
+            const existing = map.get(id);
+            const mapped: LegalEntity = {
+              id,
+              groupId: 'grp-abc',
+              name: item.name || existing?.name || id,
+              short: item.code || existing?.short || item.name || id,
+              legalRegNumber: item.metadata?.legalName || item.code || existing?.legalRegNumber || 'RJSC-REG',
+              sector: item.sector || existing?.sector || 'Manufacturing',
+              country: 'Bangladesh',
+              currency: item.currency || existing?.currency || 'BDT',
+              employees: item.employeesCount ?? existing?.employees ?? 0,
+              revenue: Number(item.revenue ?? existing?.revenue ?? 0),
+              expense: Number(item.expense ?? existing?.expense ?? 0),
+              margin: Number(item.margin ?? existing?.margin ?? 0),
+              status: (item.status?.toLowerCase() as any) || existing?.status || 'active',
+              enabledModules: Array.isArray(item.modules)
+                ? item.modules.filter((m: any) => m.status === 'ACTIVE').map((m: any) => m.moduleKey)
+                : existing?.enabledModules || ['finance', 'hr', 'procurement', 'inventory'],
+              isSisterConcern: true,
+              interCompanyCode: `IC-${item.code || existing?.short || 'CO'}`,
+            };
+            map.set(id, mapped);
+          }
+          return Array.from(map.values());
+        });
+      }
+    } catch {
+      // Backend not running or token not yet configured, cleanly utilizes initial state
+      setApiConnected(false);
+    } finally {
+      setIsLoadingApi(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBackendCompanies();
+  }, []);
 
   // Modals state
   const [createCompanyModalOpen, setCreateCompanyModalOpen] = useState(false);
@@ -497,20 +549,41 @@ export function Companies() {
         title="Legal Entities & Sister Concerns"
         description="Comprehensive management of conglomerate sister concerns, operational plants, business units, cost centers, and enabled ERP feature gates."
         meta={
-          <Badge tone="accent">
-            {scopedEntities.length} legal entities · {isGroupScoped ? 'Group Scope' : `Scoped to ${activeCompanyName}`}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge tone="accent">
+              {scopedEntities.length} legal entities · {isGroupScoped ? 'Group Scope' : `Scoped to ${activeCompanyName}`}
+            </Badge>
+            {apiConnected ? (
+              <Badge tone="success" className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live API
+              </Badge>
+            ) : (
+              <Badge tone="neutral">Enterprise State</Badge>
+            )}
+          </div>
         }
         actions={
-          canManageCompany ? (
+          <div className="flex items-center gap-2">
             <Button
-              variant="primary"
-              icon={PlusIcon}
-              onClick={() => setCreateCompanyModalOpen(true)}
+              variant="ghost"
+              icon={RefreshCwIcon}
+              onClick={fetchBackendCompanies}
+              disabled={isLoadingApi}
+              className={isLoadingApi ? 'animate-spin' : ''}
+              title="Synchronize with Organization API"
             >
-              Add legal entity
+              Sync
             </Button>
-          ) : undefined
+            {canManageCompany && (
+              <Button
+                variant="primary"
+                icon={PlusIcon}
+                onClick={() => setCreateCompanyModalOpen(true)}
+              >
+                Add legal entity
+              </Button>
+            )}
+          </div>
         }
       />
 

@@ -14,7 +14,8 @@ export class AuthController {
   @Post('login')
   @ApiOperation({ summary: 'Sign in to Okobiz Enterprise ERP with brute-force protection' })
   async login(@Body() dto: LoginDto, @Req() req: Request) {
-    return this.authService.login(dto.userId, dto.password, req.context);
+    const identifier = dto.employeeId || dto.userId;
+    return this.authService.login(identifier, dto.password, req.context);
   }
 
   @Post('refresh')

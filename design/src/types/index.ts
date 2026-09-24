@@ -710,9 +710,63 @@ export type ApprovalItemType =
   | 'leave_application'
   | 'payment_voucher'
   | 'budget_override'
-  | 'journal_entry';
+  | 'journal_entry'
+  | 'expense_claim'
+  | 'regularization_request';
 
 export type ApprovalDomain = 'Procurement' | 'HR' | 'Finance' | 'Operations';
+
+export interface ExpenseClaim {
+  id: string;
+  claimNumber: string;
+  employeeId: string;
+  employeeName: string;
+  company: string;
+  department: string;
+  title: string;
+  category: 'Travel & Lodging' | 'Meals & Entertainment' | 'Office Supplies' | 'Client Meeting' | 'Medical & Wellness' | 'Training & Certification';
+  amount: number;
+  currency: string;
+  expenseDate: string;
+  costCenter: string;
+  description: string;
+  receiptName?: string;
+  receiptUrl?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  decisionNote?: string;
+}
+
+export interface AttendanceRegularization {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  company: string;
+  department: string;
+  date: string;
+  requestType: 'Missed Biometric Punch' | 'Client On-Site Duty' | 'Overtime Work Pre-auth' | 'Remote / Work From Home';
+  checkInTime?: string;
+  checkOutTime?: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  decisionNote?: string;
+}
+
+export interface LeaveQuota {
+  employeeId: string;
+  annualTotal: number;
+  annualUsed: number;
+  sickTotal: number;
+  sickUsed: number;
+  casualTotal: number;
+  casualUsed: number;
+}
+
 
 export interface ApprovalNote {
   author: string;

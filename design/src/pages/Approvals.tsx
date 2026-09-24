@@ -47,7 +47,9 @@ const TYPE_META: Record<ApprovalItemType, { icon: React.ComponentType<{ classNam
   leave_application: { icon: CalendarCheckIcon, label: 'Leave Application' },
   payment_voucher: { icon: BanknoteIcon, label: 'Payment Voucher' },
   budget_override: { icon: AlertTriangleIcon, label: 'Budget Override' },
-  journal_entry: { icon: BookOpenIcon, label: 'Journal Entry' }
+  journal_entry: { icon: BookOpenIcon, label: 'Journal Entry' },
+  expense_claim: { icon: BanknoteIcon, label: 'Expense Claim' },
+  regularization_request: { icon: ClockIcon, label: 'Attendance Regularization' }
 };
 
 const PRIORITY_TONE: Record<ApprovalItem['priority'], 'neutral' | 'warning' | 'danger'> = {
@@ -96,6 +98,13 @@ export function Approvals() {
   const rows = priorityFilter === 'all' ? domainItems : domainItems.filter((i) => i.priority === priorityFilter);
   const selectableRows = rows.filter((r) => r.bulkEligible);
   const drawerItem = drawerItemId ? items.find((i) => i.id === drawerItemId) || null : null;
+
+  const canApproveItem = (item?: ApprovalItem | null) => {
+    if (!item) return false;
+    if (item.domain === 'HR') return can('employee.update') || can('pr.approve');
+    if (item.domain === 'Finance') return can('invoice.approve') || can('pr.approve');
+    return can('pr.approve');
+  };
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
