@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckIcon, PlusIcon, XIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/ui/Panel';
@@ -11,7 +11,7 @@ import { directoryUsers, type DirectoryUser } from '../data/directory';
 import { roleTemplates } from '../data/roles';
 import { useApp } from '../contexts/AppContext';
 import { cn } from '../utils/cn';
-
+import { iamApi } from '../api/client';
 import { CreateEmployeeModal } from '../components/iam/CreateEmployeeModal';
 
 const ALL_ROLES = Object.values(roleTemplates);
@@ -33,6 +33,44 @@ export function IAM() {
   const [tab, setTab] = useState('users');
   const [allUsers, setAllUsers] = useState<DirectoryUser[]>(directoryUsers);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    iamApi.getUsers()
+      .then((backendUsers) => {
+        if (!active || !backendUsers || backendUsers.length === 0) return;
+        const mapped: DirectoryUser[] = backendUsers.map((bu: any) => ({
+          userId: bu.employeeId || bu.email,
+          password: '',
+          personName: bu.name,
+          initials: bu.name
+            .split(' ')
+            .map((n: string) => n[0])
+            .join('')
+            .toUpperCase(),
+          email: bu.email,
+          employeeId: bu.employeeId || bu.id,
+          department: bu.assignments?.[0]?.organizationName || 'Corporate',
+          branch: bu.assignments?.[0]?.companyId || 'HQ',
+          status: (bu.status?.toLowerCase() === 'active' ? 'active' : bu.status?.toLowerCase()) as any || 'active',
+          assignments: bu.assignments?.map((a: any) => ({
+            id: a.id,
+            roleKey: a.roleKey,
+            companyId: a.companyId,
+            orgLabel: a.organizationName,
+            scopeMode: a.scopeMode || 'SUBTREE',
+            title: a.title,
+          })) || [],
+        }));
+        setAllUsers(mapped);
+      })
+      .catch(() => {
+        // Fallback to static directory users when offline/demo
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const groupScoped = can('group.read');
   const canProvision = groupScoped || can('iam.user.create') || can('employee.update');

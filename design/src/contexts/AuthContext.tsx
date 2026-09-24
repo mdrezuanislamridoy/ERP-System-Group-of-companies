@@ -172,9 +172,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const logout = useCallback(() => {
+    authApi.logout().catch(() => {});
+    setSession(null);
+    setDynamicUser(null);
+    setBackendScope(null);
+  }, []);
+
+  // Automatically redirect on 401 Unauthorized or token expiry
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      logout();
+      window.location.href = '/login';
+    };
+    window.addEventListener('okobiz:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('okobiz:unauthorized', handleUnauthorized);
+  }, [logout]);
+
   const establishSession = useCallback((userId: string, assignmentId: string) => {
     setSession({ userId, assignmentId });
-  }, []);
+    const foundUser = directoryUsers.find((u) => u.userId === userId || u.employeeId === userId) || dynamicUser;
+    const asg = foundUser?.assignments.find((a) => a.id === assignmentId);
+    if (asg?.companyId) {
+      localStorage.setItem(ACTIVE_ORG_KEY, asg.companyId);
+    }
+  }, [dynamicUser]);
 
   const switchAssignment = useCallback(
     async (assignmentId: string) => {
@@ -189,6 +211,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (res.accessToken) {
             localStorage.setItem(TOKEN_STORAGE_KEY, res.accessToken);
           }
+          if (targetAssignment?.companyId) {
+            localStorage.setItem(ACTIVE_ORG_KEY, targetAssignment.companyId);
+          }
           if (res.scope) {
             setBackendScope({
               allowedCompanyIds: res.scope.allowedCompanyIds || ['*'],
@@ -200,19 +225,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (err) {
           console.warn('Backend context switch fallback to client assignment switch:', err);
         }
+      } else if (targetAssignment?.companyId) {
+        localStorage.setItem(ACTIVE_ORG_KEY, targetAssignment.companyId);
       }
 
       setSession({ userId: user.userId, assignmentId });
     },
     [user],
   );
-
-  const logout = useCallback(() => {
-    authApi.logout().catch(() => {});
-    setSession(null);
-    setDynamicUser(null);
-    setBackendScope(null);
-  }, []);
 
   const scope = useMemo<UserScope>(() => {
     if (backendScope) return backendScope;

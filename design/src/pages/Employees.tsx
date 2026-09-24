@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlusIcon, ShieldCheckIcon, AlertTriangleIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
@@ -8,11 +8,17 @@ import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { SensitiveField } from '../components/common/SensitiveField';
 import { CreateEmployeeModal } from '../components/iam/CreateEmployeeModal';
 import { employees } from '../data/people';
-import { group } from '../data/organization';
+import { group, companies } from '../data/organization';
 import { recordAuditEvent } from '../data/system';
 import { useApp } from '../contexts/AppContext';
 import { useEntityScope } from '../contexts/EntityScopeContext';
+import { iamApi } from '../api/client';
 import type { Employee } from '../types';
+
+function companyNameById(cId?: string | null) {
+  if (!cId) return group.name;
+  return companies.find((c) => c.id === cId)?.name ?? group.name;
+}
 
 export function Employees() {
   const navigate = useNavigate();
@@ -21,6 +27,39 @@ export function Employees() {
   const [exportNotice, setExportNotice] = useState<{ message: string; tone: 'info' | 'warning' } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [employeeList, setEmployeeList] = useState<Employee[]>(employees);
+
+  useEffect(() => {
+    let active = true;
+    iamApi.getUsers()
+      .then((backendUsers) => {
+        if (!active || !backendUsers || backendUsers.length === 0) return;
+        const mapped: Employee[] = backendUsers.map((bu: any) => ({
+          id: bu.employeeId || bu.id,
+          name: bu.name,
+          position: bu.assignments?.[0]?.title || bu.assignments?.[0]?.roleName || 'Employee',
+          department: bu.assignments?.[0]?.organizationName || 'Department',
+          company: companyNameById(bu.assignments?.[0]?.companyId),
+          branch: 'Corporate HQ',
+          status: (bu.status?.toLowerCase() === 'active' ? 'active' : bu.status?.toLowerCase()) as any || 'active',
+          email: bu.email,
+          phone: bu.phone || '+880 1700-000000',
+          joined: '2024-01-15',
+          manager: 'Executive Office',
+          grade: 'L3',
+          location: 'Dhaka',
+          baseSalary: typeof bu.baseSalary === 'number' ? bu.baseSalary : undefined,
+          bankName: bu.bankName,
+          bankAccount: bu.bankAccount,
+        }));
+        setEmployeeList(mapped);
+      })
+      .catch(() => {
+        // Fallback to static mock employees
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const scoped = filterEmployees(employeeList);
 
