@@ -197,4 +197,88 @@ export const orgApi = {
   getScopedNodes: async () => {
     return request<any[]>('/organizations/nodes');
   },
+
+  createCompany: async (payload: {
+    name: string;
+    code: string;
+    sector?: string;
+    currency?: string;
+    legalName?: string;
+    taxId?: string;
+    binNumber?: string;
+    incorporatedYear?: number;
+    modules?: string[];
+  }) => {
+    return request<any>('/organizations/companies', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateCompany: async (id: string, payload: {
+    name?: string;
+    code?: string;
+    sector?: string;
+    currency?: string;
+    status?: string;
+    legalName?: string;
+    taxId?: string;
+    binNumber?: string;
+    incorporatedYear?: number;
+    metadata?: any;
+  }) => {
+    return request<any>(`/organizations/companies/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  configureCompanyModules: async (id: string, payload: {
+    modules: Array<{ moduleKey: string; status: 'ACTIVE' | 'INACTIVE'; settings?: any }>;
+  }) => {
+    return request<any>(`/organizations/companies/${id}/modules`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  createNode: async (payload: {
+    parentId: string;
+    type: string;
+    code: string;
+    name: string;
+    sector?: string;
+    city?: string;
+    headPerson?: string;
+    annualBudget?: number;
+    currency?: string;
+    metadata?: any;
+  }) => {
+    return request<any>('/organizations/nodes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateNode: async (id: string, payload: {
+    name?: string;
+    code?: string;
+    status?: string;
+    city?: string;
+    headPerson?: string;
+    annualBudget?: number;
+    metadata?: any;
+  }) => {
+    return request<any>(`/organizations/nodes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  archiveNode: async (id: string) => {
+    return request<any>(`/organizations/nodes/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
+
