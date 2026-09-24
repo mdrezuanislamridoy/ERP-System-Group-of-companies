@@ -25,9 +25,24 @@ export class PermissionsGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const userPermissions = request.context?.user?.permissions || [];
 
-    const hasPermission = requiredPermissions.every((perm) =>
-      userPermissions.includes(perm),
-    );
+    if (userPermissions.includes('*')) {
+      return true;
+    }
+
+    const hasPermission = requiredPermissions.every((perm) => {
+      if (userPermissions.includes(perm)) return true;
+      // Aliases / Hierarchical parent permissions for IAM & Org
+      if (perm === 'iam.users.read' && (userPermissions.includes('iam.user.read') || userPermissions.includes('org.read') || userPermissions.includes('employee.read'))) {
+        return true;
+      }
+      if (perm === 'iam.users.create' && (userPermissions.includes('iam.user.create') || userPermissions.includes('org.write'))) {
+        return true;
+      }
+      if (perm === 'iam.roles.read' && (userPermissions.includes('iam.role.read') || userPermissions.includes('org.read'))) {
+        return true;
+      }
+      return false;
+    });
 
     if (!hasPermission) {
       throw new ForbiddenException({

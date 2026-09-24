@@ -52,6 +52,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const json = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      window.dispatchEvent(new CustomEvent('okobiz:unauthorized'));
+    }
+
     const errorData: ApiError = json?.error || {
       code: 'REQUEST_FAILED',
       message: response.statusText || 'An error occurred with the server request',

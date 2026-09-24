@@ -16,7 +16,7 @@ export class IamController {
 
   @Get('users')
   @ApiOperation({ summary: 'List all directory users with assignments and masked sensitive attributes' })
-  @RequirePermissions('org.read')
+  @RequirePermissions('iam.users.read')
   async getUsers(@Req() req: Request) {
     return this.iamService.getUsers(req.context!);
   }
@@ -25,14 +25,14 @@ export class IamController {
   @ApiOperation({
     summary: 'Provision new employee and user account with role, department, and salary (Admin / HR only)',
   })
-  @RequirePermissions('org.read') // Secondary permission checked dynamically in service for Admin/HR/Exec
+  @RequirePermissions('iam.users.create')
   async createUser(@Body() dto: CreateEmployeeUserDto, @Req() req: Request) {
     return this.iamService.createEmployeeUser(dto, req.context!);
   }
 
   @Get('roles')
   @ApiOperation({ summary: 'List roles and permission mappings' })
-  @RequirePermissions('org.read')
+  @RequirePermissions('iam.roles.read')
   async getRoles() {
     return this.iamService.getRoles();
   }

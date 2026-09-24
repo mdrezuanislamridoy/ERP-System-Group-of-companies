@@ -426,6 +426,32 @@ describe('SECTION 2: Identity, IAM & Authentication', () => {
     );
   });
 
+  test('getMe: returns authenticated profile, assignments, and active scope', async () => {
+    const ctx: RequestContext = {
+      correlationId: 'req-test-me',
+      user: {
+        id: 'u-rahim',
+        personId: 'per-rahim',
+        email: 'rahim.ahmed@abcgroup.com',
+        permissions: ['org.read', 'finance.gl.read'],
+      },
+      scope: {
+        roleKey: 'finance-manager',
+        activeOrgId: 'org-fin',
+        activeCompanyId: 'c-foods',
+      } as any,
+    };
+
+    const me = await authService.getMe(ctx);
+
+    assert.ok(me);
+    assert.strictEqual(me.user.employeeId, 'EMP-10241');
+    assert.strictEqual(me.user.name, 'Rahim Ahmed');
+    assert.strictEqual(me.activeAssignment?.roleKey, 'finance-manager');
+    assert.strictEqual(me.availableAssignments.length, 2);
+    assert.deepStrictEqual(me.permissions, ['org.read', 'finance.gl.read']);
+  });
+
   // ─── 4. IAM Directory & Field-Level Masking ────────────────────────────────
 
   test('getUsers: masks sensitive salary and bank details when caller lacks sensitive.salary.read', async () => {

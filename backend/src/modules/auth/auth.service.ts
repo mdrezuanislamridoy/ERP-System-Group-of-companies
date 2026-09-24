@@ -454,8 +454,58 @@ export class AuthService {
 
   async getMe(ctx: RequestContext) {
     if (!ctx.user) throw new UnauthorizedException();
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: ctx.user.id },
+      include: {
+        person: true,
+        assignments: {
+          where: {
+            OR: [{ validTo: null }, { validTo: { gt: new Date() } }],
+          },
+          include: {
+            role: true,
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!user) throw new UnauthorizedException('User not found');
+
+    const activeAssignment =
+      user.assignments.find((a) => a.organizationId === ctx.scope?.activeOrgId) ||
+      user.assignments[0];
+
     return {
-      user: ctx.user,
+      user: {
+        id: user.id,
+        employeeId: user.employeeId || user.person.employeeNo,
+        email: user.email,
+        name: `${user.person.firstName} ${user.person.lastName}`,
+        status: user.status,
+      },
+      activeAssignment: activeAssignment
+        ? {
+            id: activeAssignment.id,
+            roleKey: activeAssignment.role.key,
+            roleName: activeAssignment.role.name,
+            organizationId: activeAssignment.organizationId,
+            organizationName: activeAssignment.organization.name,
+            companyId: activeAssignment.companyId,
+            title: activeAssignment.title,
+          }
+        : null,
+      availableAssignments: user.assignments.map((a) => ({
+        id: a.id,
+        roleKey: a.role.key,
+        roleName: a.role.name,
+        organizationId: a.organizationId,
+        organizationName: a.organization.name,
+        companyId: a.companyId,
+        title: a.title,
+      })),
+      permissions: ctx.user.permissions || [],
       scope: ctx.scope,
     };
   }
