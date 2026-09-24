@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { EntityScopeProvider } from './contexts/EntityScopeContext';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { AppShell } from './components/shell/AppShell';
@@ -142,6 +143,7 @@ function Shell({ density }: {density: 'comfortable' | 'compact';}) {
 
 export function App({ density = 'comfortable' }: AppProps) {
   return (
+    <ThemeProvider>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -201,6 +203,7 @@ export function App({ density = 'comfortable' }: AppProps) {
           </Route>
         </Routes>
       </BrowserRouter>
-    </AuthProvider>);
+    </AuthProvider>
+    </ThemeProvider>);
 
 }
