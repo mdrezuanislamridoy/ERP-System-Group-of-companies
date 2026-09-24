@@ -81,7 +81,7 @@ export function ContextSwitcher() {
           open && 'border-line-strong bg-surface'
         )}
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" aria-hidden />
+        <span className="h-1.5 w-1.5 rounded-full bg-success shrink-0" aria-hidden />
         <span className="max-w-[150px] truncate font-medium text-ink">
           {activeCompanyName}
         </span>
@@ -104,8 +104,8 @@ export function ContextSwitcher() {
               <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-faint">
                 Active Operating Context
               </span>
-              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-2xs font-medium text-emerald-600 dark:text-emerald-400">
-                <ShieldCheckIcon className="h-3 w-3" />
+              <span className="inline-flex items-center gap-1 rounded border border-line bg-subtle px-1.5 py-0.5 font-mono text-2xs font-medium text-muted">
+                <ShieldCheckIcon className="h-3 w-3 text-muted" />
                 ABAC Isolated
               </span>
             </div>

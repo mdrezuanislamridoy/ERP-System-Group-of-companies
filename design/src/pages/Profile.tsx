@@ -253,9 +253,9 @@ export function Profile() {
         {tab === 'security' && (
           <div className="space-y-4">
             {securityStatusMsg && (
-              <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-800 dark:text-emerald-300">
+              <div className="flex items-center justify-between rounded-xl border border-success/30 bg-success-soft/30 p-3.5 text-xs text-ink">
                 <div className="flex items-center gap-2">
-                  <ShieldCheckIcon className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <ShieldCheckIcon className="h-4 w-4 shrink-0 text-success" />
                   <span>{securityStatusMsg}</span>
                 </div>
                 <button onClick={() => setSecurityStatusMsg(null)} className="rounded p-1 hover:bg-black/10">

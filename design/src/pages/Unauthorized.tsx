@@ -98,8 +98,8 @@ export function Unauthorized({
 
               <div>
                 <dt className="text-muted">Active Authorized Company</dt>
-                <dd className="mt-0.5 font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                <dd className="mt-0.5 font-medium text-ink flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-success shrink-0" />
                   <span className="truncate">{companyName}</span>
                 </dd>
               </div>

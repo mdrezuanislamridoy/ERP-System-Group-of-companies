@@ -143,7 +143,7 @@ export function StepUpAuthModal({
         {/* Header */}
         <div className="flex items-start justify-between border-b border-line pb-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-warning-soft text-warning border border-warning/30">
               <ShieldAlertIcon className="h-5 w-5" />
             </div>
             <div>
@@ -164,9 +164,9 @@ export function StepUpAuthModal({
         </div>
 
         {/* Action Context Box */}
-        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5">
+        <div className="mt-4 rounded-xl border border-warning/30 bg-warning-soft/20 p-3.5">
           <div className="flex items-start gap-2.5">
-            <LockIcon className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+            <LockIcon className="h-4 w-4 shrink-0 text-warning mt-0.5" />
             <div className="text-xs">
               <p className="font-semibold text-ink">{actionDescription}</p>
               <p className="text-muted mt-0.5">

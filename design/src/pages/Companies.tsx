@@ -179,7 +179,7 @@ function EntityRow({ le }: { le: LegalEntity }) {
               {/* Business Units */}
               <section>
                 <div className="mb-2 flex items-center gap-1.5">
-                  <LayersIcon className="h-3.5 w-3.5 text-blue-500" aria-hidden />
+                  <LayersIcon className="h-3.5 w-3.5 text-muted" aria-hidden />
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Business Units ({bus.length})</h4>
                 </div>
                 <ul className="space-y-1">
@@ -195,7 +195,7 @@ function EntityRow({ le }: { le: LegalEntity }) {
               {/* Branches / Plants */}
               <section>
                 <div className="mb-2 flex items-center gap-1.5">
-                  <WarehouseIcon className="h-3.5 w-3.5 text-emerald-500" aria-hidden />
+                  <WarehouseIcon className="h-3.5 w-3.5 text-muted" aria-hidden />
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Branches & Plants ({bps.length})</h4>
                 </div>
                 <ul className="space-y-1">
@@ -216,7 +216,7 @@ function EntityRow({ le }: { le: LegalEntity }) {
               {/* Cost Centers */}
               <section>
                 <div className="mb-2 flex items-center gap-1.5">
-                  <CircleDollarSignIcon className="h-3.5 w-3.5 text-rose-500" aria-hidden />
+                  <CircleDollarSignIcon className="h-3.5 w-3.5 text-muted" aria-hidden />
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Cost Centers ({ccs.length})</h4>
                 </div>
                 <ul className="space-y-1">

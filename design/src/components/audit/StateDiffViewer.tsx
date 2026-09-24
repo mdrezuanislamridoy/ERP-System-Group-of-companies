@@ -94,19 +94,19 @@ export function StateDiffViewer({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
         <div className="flex items-center gap-2">
           {addedCount > 0 && (
-            <span className="flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-2xs font-semibold text-emerald-600">
+            <span className="flex items-center gap-1 rounded bg-success-soft border border-success/30 px-1.5 py-0.5 text-2xs font-semibold text-success">
               <PlusCircleIcon className="h-3 w-3" />
               +{addedCount} added
             </span>
           )}
           {modifiedCount > 0 && (
-            <span className="flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-2xs font-semibold text-amber-600">
+            <span className="flex items-center gap-1 rounded bg-warning-soft border border-warning/30 px-1.5 py-0.5 text-2xs font-semibold text-warning">
               <RefreshCwIcon className="h-3 w-3" />
               {modifiedCount} modified
             </span>
           )}
           {removedCount > 0 && (
-            <span className="flex items-center gap-1 rounded bg-rose-500/10 px-1.5 py-0.5 text-2xs font-semibold text-rose-600">
+            <span className="flex items-center gap-1 rounded bg-danger-soft border border-danger/30 px-1.5 py-0.5 text-2xs font-semibold text-danger">
               <MinusCircleIcon className="h-3 w-3" />
               -{removedCount} removed
             </span>
@@ -162,13 +162,13 @@ export function StateDiffViewer({
                 return (
                   <div
                     key={d.key}
-                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2.5 transition-colors"
+                    className="rounded-lg border border-success/30 bg-success-soft/20 p-2.5 transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                      <span className="font-mono text-xs font-semibold text-success">
                         + {d.key}
                       </span>
-                      <span className="rounded bg-emerald-500/10 px-1.5 py-0.2 text-2xs font-medium text-emerald-600">
+                      <span className="rounded bg-success-soft border border-success/30 px-1.5 py-0.2 text-2xs font-medium text-success">
                         Added
                       </span>
                     </div>
@@ -183,17 +183,17 @@ export function StateDiffViewer({
                 return (
                   <div
                     key={d.key}
-                    className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-2.5 transition-colors"
+                    className="rounded-lg border border-danger/30 bg-danger-soft/20 p-2.5 transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-semibold text-rose-700 dark:text-rose-400 line-through">
+                      <span className="font-mono text-xs font-semibold text-danger line-through">
                         - {d.key}
                       </span>
-                      <span className="rounded bg-rose-500/10 px-1.5 py-0.2 text-2xs font-medium text-rose-600">
+                      <span className="rounded bg-danger-soft border border-danger/30 px-1.5 py-0.2 text-2xs font-medium text-danger">
                         Removed
                       </span>
                     </div>
-                    <pre className="mt-1.5 overflow-x-auto font-mono text-xs text-rose-600 line-through whitespace-pre-wrap">
+                    <pre className="mt-1.5 overflow-x-auto font-mono text-xs text-danger line-through whitespace-pre-wrap">
                       {formatValue(d.beforeVal)}
                     </pre>
                   </div>
@@ -204,26 +204,26 @@ export function StateDiffViewer({
                 return (
                   <div
                     key={d.key}
-                    className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 transition-colors"
+                    className="rounded-lg border border-warning/30 bg-warning-soft/20 p-2.5 transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-semibold text-amber-700 dark:text-amber-400">
+                      <span className="font-mono text-xs font-semibold text-warning">
                         Δ {d.key}
                       </span>
-                      <span className="rounded bg-amber-500/10 px-1.5 py-0.2 text-2xs font-medium text-amber-600">
+                      <span className="rounded bg-warning-soft border border-warning/30 px-1.5 py-0.2 text-2xs font-medium text-warning">
                         Modified
                       </span>
                     </div>
                     <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div className="rounded bg-rose-500/10 border border-rose-500/20 p-2">
-                        <span className="block text-2xs font-semibold uppercase text-rose-600">Before</span>
-                        <pre className="mt-0.5 overflow-x-auto font-mono text-xs text-rose-700 dark:text-rose-300 line-through whitespace-pre-wrap">
+                      <div className="rounded bg-danger-soft/30 border border-danger/30 p-2">
+                        <span className="block text-2xs font-semibold uppercase text-danger">Before</span>
+                        <pre className="mt-0.5 overflow-x-auto font-mono text-xs text-danger line-through whitespace-pre-wrap">
                           {formatValue(d.beforeVal)}
                         </pre>
                       </div>
-                      <div className="rounded bg-emerald-500/10 border border-emerald-500/20 p-2">
-                        <span className="block text-2xs font-semibold uppercase text-emerald-600">After</span>
-                        <pre className="mt-0.5 overflow-x-auto font-mono text-xs text-emerald-700 dark:text-emerald-300 font-semibold whitespace-pre-wrap">
+                      <div className="rounded bg-success-soft/30 border border-success/30 p-2">
+                        <span className="block text-2xs font-semibold uppercase text-success">After</span>
+                        <pre className="mt-0.5 overflow-x-auto font-mono text-xs text-success font-semibold whitespace-pre-wrap">
                           {formatValue(d.afterVal)}
                         </pre>
                       </div>

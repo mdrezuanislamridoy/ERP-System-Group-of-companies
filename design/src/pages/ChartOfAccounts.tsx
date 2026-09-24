@@ -271,13 +271,7 @@ export function ChartOfAccounts() {
                             </div>
                           </td>
                           <td className="px-4 py-2.5 text-xs text-muted">
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium ${
-                              a.type === 'Asset' ? 'bg-blue-500/10 text-blue-500' :
-                              a.type === 'Liability' ? 'bg-amber-500/10 text-amber-500' :
-                              a.type === 'Equity' ? 'bg-purple-500/10 text-purple-500' :
-                              a.type === 'Revenue' ? 'bg-emerald-500/10 text-emerald-500' :
-                              'bg-rose-500/10 text-rose-500'
-                            }`}>
+                            <span className="inline-block px-1.5 py-0.5 rounded border border-line bg-subtle text-[11px] font-medium text-muted">
                               {a.type}
                             </span>
                           </td>
@@ -289,7 +283,7 @@ export function ChartOfAccounts() {
                           </td>
                           <td className="px-4 py-2.5 text-right font-mono tabular text-sm text-ink">
                             {a.debitMovement && a.debitMovement > 0 ? (
-                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                              <span className="font-medium text-ink">
                                 +{formatCurrencyFull(a.debitMovement)}
                               </span>
                             ) : (
@@ -298,7 +292,7 @@ export function ChartOfAccounts() {
                           </td>
                           <td className="px-4 py-2.5 text-right font-mono tabular text-sm text-ink">
                             {a.creditMovement && a.creditMovement > 0 ? (
-                              <span className="text-rose-600 dark:text-rose-400 font-medium">
+                              <span className="font-medium text-ink">
                                 +{formatCurrencyFull(a.creditMovement)}
                               </span>
                             ) : (
@@ -377,13 +371,13 @@ export function ChartOfAccounts() {
                   </div>
                   <div>
                     <div className="text-xs text-muted">Debits</div>
-                    <div className="font-mono text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                    <div className="font-mono text-sm font-semibold text-ink">
                       +{formatCurrencyFull(selectedAccount.debitMovement ?? 0)}
                     </div>
                   </div>
                   <div>
                     <div className="text-xs text-muted">Credits</div>
-                    <div className="font-mono text-sm font-semibold text-rose-600 dark:text-rose-400">
+                    <div className="font-mono text-sm font-semibold text-ink">
                       +{formatCurrencyFull(selectedAccount.creditMovement ?? 0)}
                     </div>
                   </div>
@@ -456,7 +450,7 @@ export function ChartOfAccounts() {
                           </td>
                           <td className="px-4 py-2.5 text-right font-mono tabular text-sm text-ink">
                             {p.debit > 0 ? (
-                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                              <span className="font-medium text-ink">
                                 {formatCurrencyFull(p.debit)}
                               </span>
                             ) : (
@@ -465,7 +459,7 @@ export function ChartOfAccounts() {
                           </td>
                           <td className="px-4 py-2.5 text-right font-mono tabular text-sm text-ink">
                             {p.credit > 0 ? (
-                              <span className="text-rose-600 dark:text-rose-400 font-medium">
+                              <span className="font-medium text-ink">
                                 {formatCurrencyFull(p.credit)}
                               </span>
                             ) : (
@@ -492,14 +486,14 @@ export function ChartOfAccounts() {
             <div
               className={`rounded-lg border p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
                 trialBalance.isBalanced
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200'
-                  : 'border-rose-500/30 bg-rose-500/10 text-rose-900 dark:text-rose-200'
+                  ? 'border-success/30 bg-success-soft/30 text-ink'
+                  : 'border-danger/30 bg-danger-soft/30 text-ink'
               }`}
             >
               <div className="flex items-center gap-3">
                 <div
                   className={`flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold ${
-                    trialBalance.isBalanced ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                    trialBalance.isBalanced ? 'bg-success text-white' : 'bg-danger text-white'
                   }`}
                 >
                   {trialBalance.isBalanced ? '✓' : '!'}
@@ -553,10 +547,10 @@ export function ChartOfAccounts() {
                       <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-faint">Debit Mvt</th>
                       <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-faint">Credit Mvt</th>
                       <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-faint">Closing Balance</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-faint">
                         Net Debit (৳)
                       </th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                      <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-faint">
                         Net Credit (৳)
                       </th>
                     </tr>
@@ -574,13 +568,7 @@ export function ChartOfAccounts() {
                           {row.accountName}
                         </td>
                         <td className="px-4 py-2 text-xs text-muted">
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium ${
-                            row.accountType === 'Asset' ? 'bg-blue-500/10 text-blue-500' :
-                            row.accountType === 'Liability' ? 'bg-amber-500/10 text-amber-500' :
-                            row.accountType === 'Equity' ? 'bg-purple-500/10 text-purple-500' :
-                            row.accountType === 'Revenue' ? 'bg-emerald-500/10 text-emerald-500' :
-                            'bg-rose-500/10 text-rose-500'
-                          }`}>
+                          <span className="inline-block px-1.5 py-0.5 rounded border border-line bg-subtle text-[11px] font-medium text-muted">
                             {row.accountType}
                           </span>
                         </td>
@@ -596,10 +584,10 @@ export function ChartOfAccounts() {
                         <td className="px-4 py-2 text-right font-mono tabular text-sm font-medium text-ink">
                           {formatCurrencyFull(row.closingBalance)}
                         </td>
-                        <td className="px-4 py-2 text-right font-mono tabular text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                        <td className="px-4 py-2 text-right font-mono tabular text-sm font-medium text-ink">
                           {row.netDebit > 0 ? formatCurrencyFull(row.netDebit) : '—'}
                         </td>
-                        <td className="px-4 py-2 text-right font-mono tabular text-sm font-semibold text-rose-600 dark:text-rose-400">
+                        <td className="px-4 py-2 text-right font-mono tabular text-sm font-medium text-ink">
                           {row.netCredit > 0 ? formatCurrencyFull(row.netCredit) : '—'}
                         </td>
                       </tr>
@@ -611,10 +599,10 @@ export function ChartOfAccounts() {
                       <td colSpan={7} className="px-4 py-3 text-right text-xs uppercase tracking-wider text-ink font-bold">
                         Total Balance Verification:
                       </td>
-                      <td className="px-4 py-3 text-right font-mono tabular text-base font-bold text-emerald-600 dark:text-emerald-400">
+                      <td className="px-4 py-3 text-right font-mono tabular text-base font-bold text-ink">
                         {formatCurrencyFull(trialBalance.totalDebit)}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono tabular text-base font-bold text-rose-600 dark:text-rose-400">
+                      <td className="px-4 py-3 text-right font-mono tabular text-base font-bold text-ink">
                         {formatCurrencyFull(trialBalance.totalCredit)}
                       </td>
                     </tr>
@@ -760,7 +748,7 @@ export function ChartOfAccounts() {
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-mono tabular text-ink">
                                     {line.debit > 0 ? (
-                                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                                      <span className="font-medium text-ink">
                                         {formatCurrencyFull(line.debit)}
                                       </span>
                                     ) : (
@@ -769,7 +757,7 @@ export function ChartOfAccounts() {
                                   </td>
                                   <td className="px-3 py-1.5 text-right font-mono tabular text-ink">
                                     {line.credit > 0 ? (
-                                      <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                                      <span className="font-medium text-ink">
                                         {formatCurrencyFull(line.credit)}
                                       </span>
                                     ) : (
@@ -784,10 +772,10 @@ export function ChartOfAccounts() {
                                 <td colSpan={3} className="px-3 py-2 text-right uppercase text-muted">
                                   Balanced Totals:
                                 </td>
-                                <td className="px-3 py-2 text-right font-mono tabular text-emerald-600 dark:text-emerald-400">
+                                <td className="px-3 py-2 text-right font-mono tabular text-ink">
                                   {formatCurrencyFull(voucher.totalDebit)}
                                 </td>
-                                <td className="px-3 py-2 text-right font-mono tabular text-rose-600 dark:text-rose-400">
+                                <td className="px-3 py-2 text-right font-mono tabular text-ink">
                                   {formatCurrencyFull(voucher.totalCredit)}
                                 </td>
                               </tr>

@@ -218,7 +218,7 @@ export function ApprovalDetail() {
 
                 <>
                   {!approvalCheck.allowed && (
-                    <div className="mb-3 rounded border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
+                    <div className="mb-3 rounded border border-warning/30 bg-warning-soft/20 p-2.5 text-xs text-warning">
                       <p className="font-semibold">⚠️ Financial Approval Ceiling Exceeded</p>
                       <p className="mt-0.5">
                         Amount of ৳{request.amount.toLocaleString('en-IN')} exceeds your approval ceiling of ৳{approvalCheck.limit.toLocaleString('en-IN')}.

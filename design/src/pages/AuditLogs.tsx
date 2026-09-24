@@ -254,13 +254,13 @@ export function AuditLogs() {
           <div
             className={`flex items-center justify-between rounded-xl border p-3.5 text-xs ${
               verification.isValid
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
-                : 'border-danger/30 bg-danger-soft text-danger font-medium'
+                ? 'border-success/30 bg-success-soft/30 text-ink'
+                : 'border-danger/30 bg-danger-soft/30 text-danger font-medium'
             }`}
           >
             <div className="flex items-center gap-2.5">
               {verification.isValid ? (
-                <ShieldCheckIcon className="h-4 w-4 shrink-0 text-emerald-600" />
+                <ShieldCheckIcon className="h-4 w-4 shrink-0 text-success" />
               ) : (
                 <AlertTriangleIcon className="h-4 w-4 shrink-0 text-danger" />
               )}
@@ -357,8 +357,8 @@ export function AuditLogs() {
 
             {/* Justification Callout */}
             {selected.justificationReason && (
-              <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs">
-                <span className="font-semibold text-amber-700 dark:text-amber-400 block text-2xs uppercase">
+              <div className="mb-4 rounded-lg border border-warning/30 bg-warning-soft/20 p-3 text-xs">
+                <span className="font-semibold text-warning block text-2xs uppercase">
                   Audit Justification / Approval Reason
                 </span>
                 <p className="mt-1 text-ink">{selected.justificationReason}</p>
@@ -462,10 +462,10 @@ export function AuditLogs() {
                 </div>
 
                 {/* Single Block Mathematical Proof Verification */}
-                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <div className="rounded-lg border border-success/30 bg-success-soft/20 p-3">
                   <div className="flex items-center gap-2">
-                    <ShieldCheckIcon className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    <ShieldCheckIcon className="h-4 w-4 text-success shrink-0" />
+                    <span className="text-xs font-semibold text-ink">
                       Cryptographic Seal Verified
                     </span>
                   </div>

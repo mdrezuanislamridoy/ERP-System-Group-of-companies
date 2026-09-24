@@ -57,7 +57,7 @@ export function TopBar({ onMenu }: {onMenu: () => void;}) {
       </button>
 
       <Link to="/" className="flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded bg-accent font-mono text-sm font-semibold text-white">
+        <span className="flex h-6 w-6 items-center justify-center rounded border border-line bg-surface font-mono text-sm font-semibold text-ink">
           A
         </span>
         <span className="hidden text-md font-semibold tracking-tight text-ink sm:block">ABC Group OS</span>
@@ -102,7 +102,7 @@ export function TopBar({ onMenu }: {onMenu: () => void;}) {
               menuOpen && 'border-line bg-surface'
             )}>
             
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-soft font-mono text-xs font-medium text-accent">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-line bg-surface font-mono text-xs font-medium text-muted">
               {role.initials}
             </span>
             <span className="hidden text-base text-ink lg:block">{role.user}</span>

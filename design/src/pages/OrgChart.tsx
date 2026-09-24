@@ -31,13 +31,13 @@ import {
 type NodeKind = OrgNode['kind'];
 
 const KIND_META: Record<NodeKind, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
-  group:         { label: 'Group',         icon: NetworkIcon,          color: 'text-accent' },
-  company:       { label: 'Legal Entity',  icon: BuildingIcon,         color: 'text-violet-500' },
-  'business-unit':{ label: 'Business Unit',icon: LayersIcon,           color: 'text-blue-500'   },
-  branch:        { label: 'Branch / Plant',icon: WarehouseIcon,        color: 'text-emerald-500' },
-  department:    { label: 'Department',    icon: UsersIcon,            color: 'text-amber-500'  },
-  'cost-center': { label: 'Cost Center',   icon: CircleDollarSignIcon, color: 'text-rose-500'   },
-  team:          { label: 'Team',          icon: LocateIcon,           color: 'text-faint'      },
+  group:         { label: 'Group',         icon: NetworkIcon,          color: 'text-ink' },
+  company:       { label: 'Legal Entity',  icon: BuildingIcon,         color: 'text-muted' },
+  'business-unit':{ label: 'Business Unit',icon: LayersIcon,           color: 'text-muted' },
+  branch:        { label: 'Branch / Plant',icon: WarehouseIcon,        color: 'text-muted' },
+  department:    { label: 'Department',    icon: UsersIcon,            color: 'text-muted' },
+  'cost-center': { label: 'Cost Center',   icon: CircleDollarSignIcon, color: 'text-muted' },
+  team:          { label: 'Team',          icon: LocateIcon,           color: 'text-faint' },
 };
 
 // ─── Flatten tree for search ──────────────────────────────────────────────────
