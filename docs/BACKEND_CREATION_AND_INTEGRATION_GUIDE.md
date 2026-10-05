@@ -766,6 +766,99 @@ model NumberSequence {
 
 ---
 
+## SECTION 9: Attendance & Payroll Management (`hr`)
+
+### 9.1 Overview & Purpose
+Extends the HR module (Section 3) with the operational attendance register and a full payroll engine:
+1. **Daily Attendance**: Self-service clock-in/clock-out, one record per employee per day, late-arrival detection against a 09:15 grace cutoff.
+2. **Salary Structures**: Per-employee Basic / House Rent / Medical / Conveyance / Other breakdown, defaulting to a standard 50/25/10/7/8 split of `Person.baseSalary` until HR sets an explicit structure.
+3. **Payroll Runs & Payslips**: HR/Finance generates one payroll run per company per period; each payslip computes Provident Fund (5% of Basic), simplified tax withholding (5% of gross above ৳20,000), and a Loss-of-Pay deduction prorated from that period's absences. Finalizing a run posts a balanced GL journal entry (Dr `5210` Salaries & Wages, Cr `2120` Salaries Payable) and locks the payslips.
+
+### 9.2 Database Schema (`schema.prisma`)
+```prisma
+model AttendanceRecord {
+  id           String    @id @default(uuid())
+  personId     String    @map("person_id")
+  companyId    String    @map("company_id")
+  date         DateTime  @db.Date
+  status       String    @default("PRESENT") @db.VarChar(16) // PRESENT, LATE, ABSENT, ON_LEAVE, HALF_DAY
+  checkInAt    DateTime? @map("check_in_at")
+  checkOutAt   DateTime? @map("check_out_at")
+  workingHours Decimal?  @map("working_hours") @db.Decimal(5, 2)
+  @@unique([personId, date])
+  @@index([companyId, date])
+  @@map("attendance_records")
+}
+
+model SalaryStructure {
+  id            String   @id @default(uuid())
+  personId      String   @unique @map("person_id")
+  companyId     String   @map("company_id")
+  basic         Decimal  @db.Decimal(19, 4)
+  houseRent     Decimal  @default(0) @map("house_rent") @db.Decimal(19, 4)
+  medical       Decimal  @default(0) @db.Decimal(19, 4)
+  conveyance    Decimal  @default(0) @db.Decimal(19, 4)
+  other         Decimal  @default(0) @db.Decimal(19, 4)
+  grossMonthly  Decimal  @map("gross_monthly") @db.Decimal(19, 4)
+  @@map("salary_structures")
+}
+
+model PayrollRun {
+  id              String    @id @default(uuid())
+  runNumber       String    @map("run_number") @db.VarChar(64)
+  companyId       String    @map("company_id")
+  periodMonth     Int       @map("period_month")
+  periodYear      Int       @map("period_year")
+  status          String    @default("PROCESSING") @db.VarChar(16) // PROCESSING, COMPLETED
+  totalGross      Decimal   @default(0) @map("total_gross") @db.Decimal(19, 4)
+  totalDeductions Decimal   @default(0) @map("total_deductions") @db.Decimal(19, 4)
+  totalNet        Decimal   @default(0) @map("total_net") @db.Decimal(19, 4)
+  payslips        Payslip[]
+  @@unique([companyId, periodMonth, periodYear])
+  @@map("payroll_runs")
+}
+
+model Payslip {
+  id              String     @id @default(uuid())
+  payrollRunId    String     @map("payroll_run_id")
+  personId        String     @map("person_id")
+  grossPay        Decimal    @map("gross_pay") @db.Decimal(19, 4)
+  lopDays         Int        @default(0) @map("lop_days")
+  providentFund   Decimal    @default(0) @map("provident_fund") @db.Decimal(19, 4)
+  taxDeduction    Decimal    @default(0) @map("tax_deduction") @db.Decimal(19, 4)
+  lopDeduction    Decimal    @default(0) @map("lop_deduction") @db.Decimal(19, 4)
+  netPay          Decimal    @map("net_pay") @db.Decimal(19, 4)
+  status          String     @default("PROCESSING") @db.VarChar(16)
+  @@unique([payrollRunId, personId])
+  @@map("payslips")
+}
+```
+*(See `backend/prisma/schema.prisma` for the complete field list including the per-component Decimal columns carried onto each `Payslip`.)*
+
+### 9.3 Backend REST Endpoints (`backend/src/modules/hr/`)
+| Verb | Endpoint | Permission Required | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/hr/attendance/clock-in` | *(self)* | Records today's check-in for the authenticated employee |
+| `POST` | `/api/v1/hr/attendance/clock-out` | *(self)* | Records today's check-out and computes working hours |
+| `GET` | `/api/v1/hr/attendance/me` | *(self)* | The authenticated employee's attendance register for a period |
+| `GET` | `/api/v1/hr/attendance/:personId` | `hr.attendance.read` | Manager/HR view of one employee's attendance, company-scope checked |
+| `GET` | `/api/v1/hr/payroll/salary-structure/me` | *(self)* | The authenticated employee's own salary breakdown |
+| `GET` | `/api/v1/hr/payroll/salary-structure/:personId` | `hr.payroll.read` | View another employee's salary structure |
+| `PUT` | `/api/v1/hr/payroll/salary-structure/:personId` | `hr.payroll.manage` | Create/update an employee's Basic/HRA/Medical/Conveyance/Other split |
+| `POST` | `/api/v1/hr/payroll/runs` | `hr.payroll.manage` | Generates payslips for every employee assigned to a company for a period |
+| `POST` | `/api/v1/hr/payroll/runs/:id/finalize` | `hr.payroll.manage` | Posts the GL journal entry and marks the run/payslips `COMPLETED` |
+| `GET` | `/api/v1/hr/payroll/runs` | `hr.payroll.read` | Lists payroll runs within the caller's ABAC company scope |
+| `GET` | `/api/v1/hr/payroll/runs/:id/payslips` | `hr.payroll.read` | Lists payslips generated by one run |
+| `GET` | `/api/v1/hr/payroll/payslips/me` | *(self)* | The authenticated employee's own payslip history |
+
+### 9.4 Frontend Integration
+The current prototype (`design/src/`) implements this feature end-to-end against a deterministic client-side data layer so it is fully interactive without the backend running; wiring to the endpoints above is the remaining integration step, same as Finance/Procurement/Inventory.
+- **Data Store**: `design/src/data/attendance.ts` (clock state), `design/src/data/payroll.ts` (salary structures, payroll runs, payslips — mirrors the computation rules in 9.1).
+- **UI Pages**: `design/src/pages/HR.tsx` (Payroll tab — register + self payslips), `design/src/pages/EmployeeDetail.tsx` (Payroll tab — per-employee structure + history).
+- **Components**: `design/src/components/hr/PayslipModal.tsx` (print view), `RunPayrollModal.tsx`, `SalaryStructureModal.tsx`.
+
+---
+
 # Frontend-to-Backend Integration Master Guide
 
 ### Step 1: Centralized API Client Architecture (`design/src/api/client.ts`)

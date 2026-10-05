@@ -11,6 +11,10 @@ async function main() {
   // 1. Clear existing data in reverse order of foreign keys
   await prisma.outboxEvent.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.payslip.deleteMany();
+  await prisma.payrollRun.deleteMany();
+  await prisma.salaryStructure.deleteMany();
+  await prisma.attendanceRecord.deleteMany();
   await prisma.workflowTask.deleteMany();
   await prisma.workflowInstance.deleteMany();
   await prisma.workflowDefinition.deleteMany();
@@ -163,7 +167,7 @@ async function main() {
     }
 
     // Number sequences per company
-    for (const docType of ['JOURNAL', 'INVOICE', 'PO', 'PR']) {
+    for (const docType of ['JOURNAL', 'INVOICE', 'PO', 'PR', 'PAYROLL']) {
       await prisma.numberSequence.create({
         data: {
           companyId: comp.id,
@@ -256,6 +260,9 @@ async function main() {
     { key: 'iam.user.create', moduleKey: 'IAM', resource: 'user', action: 'create' },
     { key: 'audit.logs.read', moduleKey: 'GOVERNANCE', resource: 'audit_log', action: 'read' },
     { key: 'sensitive.salary.read', moduleKey: 'HR', resource: 'salary', action: 'read', isSensitive: true },
+    { key: 'hr.attendance.read', moduleKey: 'HR', resource: 'attendance', action: 'read' },
+    { key: 'hr.payroll.read', moduleKey: 'HR', resource: 'payroll', action: 'read' },
+    { key: 'hr.payroll.manage', moduleKey: 'HR', resource: 'payroll', action: 'manage', isSensitive: true },
   ];
 
   for (const p of permissions) {
@@ -277,7 +284,7 @@ async function main() {
       level: 'GROUP',
       isSystem: true,
       attributes: { financialApprovalLimit: 50000000 },
-      perms: ['org.read', 'finance.gl.read', 'finance.gl.post', 'finance.approval.level1', 'audit.logs.read', 'sensitive.salary.read'],
+      perms: ['org.read', 'finance.gl.read', 'finance.gl.post', 'finance.approval.level1', 'audit.logs.read', 'sensitive.salary.read', 'hr.attendance.read', 'hr.payroll.read', 'hr.payroll.manage'],
     },
     {
       key: 'company-cfo',
@@ -285,7 +292,7 @@ async function main() {
       level: 'COMPANY',
       isSystem: true,
       attributes: { financialApprovalLimit: 2500000 },
-      perms: ['org.read', 'finance.gl.read', 'finance.gl.post', 'finance.approval.level1', 'procurement.pr.approve'],
+      perms: ['org.read', 'finance.gl.read', 'finance.gl.post', 'finance.approval.level1', 'procurement.pr.approve', 'sensitive.salary.read', 'hr.payroll.read', 'hr.payroll.manage'],
     },
     {
       key: 'procurement-officer',
@@ -445,6 +452,7 @@ async function main() {
     { code: '2000', name: 'Liabilities', level: 1, type: 'LIABILITY', normal: 'CREDIT' },
     { code: '2100', name: 'Current Liabilities', level: 2, type: 'LIABILITY', normal: 'CREDIT', parent: '2000' },
     { code: '2110', name: 'Accounts Payable', level: 3, type: 'LIABILITY', normal: 'CREDIT', parent: '2100', opening: 48000000 },
+    { code: '2120', name: 'Salaries Payable', level: 3, type: 'LIABILITY', normal: 'CREDIT', parent: '2100', opening: 0 },
     { code: '3000', name: 'Equity', level: 1, type: 'EQUITY', normal: 'CREDIT' },
     { code: '3100', name: 'Share Capital', level: 2, type: 'EQUITY', normal: 'CREDIT', parent: '3000', opening: 150000000 },
     { code: '3200', name: 'Retained Earnings', level: 2, type: 'EQUITY', normal: 'CREDIT', parent: '3000', opening: 173000000 },
@@ -453,6 +461,7 @@ async function main() {
     { code: '5000', name: 'Expenses', level: 1, type: 'EXPENSE', normal: 'DEBIT' },
     { code: '5100', name: 'Cost of Goods Sold (COGS)', level: 2, type: 'EXPENSE', normal: 'DEBIT', parent: '5000', opening: 0 },
     { code: '5200', name: 'Administrative & Operating Expenses', level: 2, type: 'EXPENSE', normal: 'DEBIT', parent: '5000', opening: 0 },
+    { code: '5210', name: 'Salaries & Wages', level: 3, type: 'EXPENSE', normal: 'DEBIT', parent: '5200', opening: 0 },
   ];
 
   for (const acc of coa) {
@@ -497,6 +506,108 @@ async function main() {
       status: 'ACTIVE',
     },
   });
+
+  // 9b. Attendance, Salary Structures & a Historical Payroll Run (c-foods)
+  const foodsCompanyUsers = await prisma.user.findMany({
+    where: { assignments: { some: { companyId: 'c-foods' } } },
+    include: { person: true },
+  });
+
+  for (const u of foodsCompanyUsers) {
+    if (u.person.baseSalary == null) continue;
+    const gross = Number(u.person.baseSalary);
+    const basic = Math.round(gross * 0.5);
+    const houseRent = Math.round(gross * 0.25);
+    const medical = Math.round(gross * 0.1);
+    const conveyance = Math.round(gross * 0.07);
+    const other = gross - basic - houseRent - medical - conveyance;
+
+    await prisma.salaryStructure.create({
+      data: {
+        personId: u.personId,
+        companyId: 'c-foods',
+        basic,
+        houseRent,
+        medical,
+        conveyance,
+        other,
+        grossMonthly: gross,
+      },
+    });
+
+    // Seed a working week of August 2026 attendance (Sun-Thu week).
+    for (let day = 3; day <= 7; day++) {
+      await prisma.attendanceRecord.create({
+        data: {
+          personId: u.personId,
+          companyId: 'c-foods',
+          date: new Date(2026, 7, day),
+          status: 'PRESENT',
+          checkInAt: new Date(2026, 7, day, 9, 5),
+          checkOutAt: new Date(2026, 7, day, 18, 10),
+          workingHours: 9.08,
+        },
+      });
+    }
+  }
+
+  const foodsSalaryStructures = await prisma.salaryStructure.findMany({ where: { companyId: 'c-foods' } });
+  if (foodsSalaryStructures.length > 0) {
+    const totalGross = foodsSalaryStructures.reduce((s, p) => s + Number(p.grossMonthly), 0);
+    const totalProvidentFund = foodsSalaryStructures.reduce((s, p) => s + Math.round(Number(p.basic) * 0.05), 0);
+    const totalTax = foodsSalaryStructures.reduce(
+      (s, p) => s + Math.round(Math.max(0, Number(p.grossMonthly) - 20000) * 0.05),
+      0,
+    );
+    const totalDeductions = totalProvidentFund + totalTax;
+
+    const augustPayrollRun = await prisma.payrollRun.create({
+      data: {
+        runNumber: 'PAYROLL-FOODS-2026-000001',
+        companyId: 'c-foods',
+        periodMonth: 8,
+        periodYear: 2026,
+        status: 'COMPLETED',
+        employeeCount: foodsSalaryStructures.length,
+        totalGross,
+        totalDeductions,
+        totalNet: totalGross - totalDeductions,
+        generatedBy: 'System (seed)',
+        processedBy: 'System (seed)',
+        processedAt: new Date(2026, 7, 28),
+      },
+    });
+
+    for (const s of foodsSalaryStructures) {
+      const grossPay = Number(s.grossMonthly);
+      const providentFund = Math.round(Number(s.basic) * 0.05);
+      const taxDeduction = Math.round(Math.max(0, grossPay - 20000) * 0.05);
+
+      await prisma.payslip.create({
+        data: {
+          payrollRunId: augustPayrollRun.id,
+          personId: s.personId,
+          basic: s.basic,
+          houseRent: s.houseRent,
+          medical: s.medical,
+          conveyance: s.conveyance,
+          other: s.other,
+          grossPay,
+          workingDays: 22,
+          presentDays: 22,
+          lopDays: 0,
+          providentFund,
+          taxDeduction,
+          lopDeduction: 0,
+          totalDeductions: providentFund + taxDeduction,
+          netPay: grossPay - providentFund - taxDeduction,
+          status: 'COMPLETED',
+        },
+      });
+    }
+  }
+
+  console.log('✅ Seeded attendance records, salary structures and a historical payroll run.');
 
   // 10. Sample Purchase Request with Workflow
   const pr = await prisma.purchaseRequest.create({

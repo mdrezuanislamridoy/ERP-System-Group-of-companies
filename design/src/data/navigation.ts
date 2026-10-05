@@ -96,7 +96,8 @@ export const navigation: NavSection[] = [
 {
   label: 'People',
   items: [
-  { label: 'Attendance & Leave', to: '/hr', icon: CalendarCheckIcon, permission: 'employee.read', module: 'hr' }]
+  { label: 'Attendance & Leave', to: '/hr', icon: CalendarCheckIcon, permission: 'employee.read', module: 'hr' },
+  { label: 'Payroll', to: '/hr?tab=payroll', icon: CircleDollarSignIcon, permission: 'payroll.read', module: 'payroll' }]
 
 },
 {
@@ -128,6 +129,7 @@ export const employeeNavigation: NavSection[] = [
   items: [
   { label: 'Attendance', to: '/hr', icon: CalendarCheckIcon },
   { label: 'Leave', to: '/hr?tab=leave', icon: ListTreeIcon },
+  { label: 'Payslips', to: '/hr?tab=payroll', icon: CircleDollarSignIcon },
   { label: 'My Requests', to: '/me?tab=requests', icon: FileTextIcon },
   { label: 'Announcements', to: '/me?tab=announcements', icon: ActivityIcon }]
 

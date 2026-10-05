@@ -41,7 +41,7 @@ export const roleTemplates: Record<string, RoleTemplate> = {
     permissions: [
     'group.read', 'company.read', 'company.manage', 'finance.read', 'finance.approve',
     'invoice.read', 'invoice.create', 'invoice.update', 'invoice.approve', 'invoice.cancel',
-    'employee.read', 'employee.update', 'payroll.read', 'pr.read', 'pr.approve', 'po.create',
+    'employee.read', 'employee.update', 'payroll.read', 'payroll.manage', 'pr.read', 'pr.approve', 'po.create',
     'inventory.read', 'workflow.manage', 'audit.read', 'iam.manage', 'settings.manage', 'reports.read',
     'sensitive.salary.read', 'sensitive.nid.read', 'sensitive.bank.read', 'sensitive.export',
     'self.read']
@@ -54,7 +54,7 @@ export const roleTemplates: Record<string, RoleTemplate> = {
     description: 'Group-wide finance authority — approvals, consolidated reporting, audit visibility.',
     permissions: [
     'group.read', 'company.read', 'finance.read', 'finance.approve', 'invoice.read', 'invoice.create',
-    'invoice.update', 'invoice.approve', 'invoice.cancel', 'payroll.read', 'pr.read', 'pr.approve',
+    'invoice.update', 'invoice.approve', 'invoice.cancel', 'payroll.read', 'payroll.manage', 'pr.read', 'pr.approve',
     'reports.read', 'audit.read',
     'sensitive.salary.read', 'sensitive.bank.read', 'sensitive.export',
     'self.read'],
@@ -96,7 +96,7 @@ export const roleTemplates: Record<string, RoleTemplate> = {
     description: 'Runs one company — finance approvals, workforce and inventory oversight.',
     permissions: [
     'company.read', 'finance.read', 'finance.approve', 'invoice.read', 'invoice.create', 'invoice.update',
-    'invoice.approve', 'employee.read', 'payroll.read', 'pr.read', 'pr.approve', 'inventory.read',
+    'invoice.approve', 'employee.read', 'payroll.read', 'payroll.manage', 'pr.read', 'pr.approve', 'inventory.read',
     'audit.read', 'reports.read', 'settings.manage',
     'sensitive.salary.read', 'sensitive.nid.read', 'sensitive.bank.read', 'sensitive.export',
     'self.read'],
@@ -110,7 +110,7 @@ export const roleTemplates: Record<string, RoleTemplate> = {
     description: 'Company-level finance authority and approvals.',
     permissions: [
     'company.read', 'finance.read', 'finance.approve', 'invoice.read', 'invoice.create', 'invoice.update',
-    'invoice.approve', 'payroll.read', 'pr.read', 'pr.approve', 'reports.read', 'audit.read',
+    'invoice.approve', 'payroll.read', 'payroll.manage', 'pr.read', 'pr.approve', 'reports.read', 'audit.read',
     'sensitive.salary.read', 'sensitive.bank.read',
     'self.read'],
 
@@ -121,7 +121,7 @@ export const roleTemplates: Record<string, RoleTemplate> = {
     label: 'Head of Human Resources',
     level: 'company-exec',
     description: 'Workforce records, payroll visibility and HR reporting for one company.',
-    permissions: ['company.read', 'employee.read', 'employee.update', 'payroll.read', 'reports.read', 'sensitive.salary.read', 'sensitive.nid.read', 'sensitive.bank.read', 'sensitive.export', 'self.read']
+    permissions: ['company.read', 'employee.read', 'employee.update', 'payroll.read', 'payroll.manage', 'reports.read', 'sensitive.salary.read', 'sensitive.nid.read', 'sensitive.bank.read', 'sensitive.export', 'self.read']
   },
   'it-head': {
     key: 'it-head',
@@ -200,7 +200,7 @@ export const roleTemplates: Record<string, RoleTemplate> = {
     permissions: [
     'group.read', 'company.read', 'company.manage', 'finance.read', 'finance.approve',
     'invoice.read', 'invoice.create', 'invoice.update', 'invoice.approve', 'invoice.cancel',
-    'employee.read', 'employee.update', 'payroll.read', 'pr.read', 'pr.approve', 'po.create',
+    'employee.read', 'employee.update', 'payroll.read', 'payroll.manage', 'pr.read', 'pr.approve', 'po.create',
     'inventory.read', 'workflow.manage', 'audit.read', 'iam.manage', 'settings.manage',
     'reports.read',
     'sensitive.salary.read', 'sensitive.nid.read', 'sensitive.bank.read', 'sensitive.export',

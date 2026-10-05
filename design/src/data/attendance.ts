@@ -283,6 +283,64 @@ export function getMyAttendance(
   return { records, summary, employee };
 }
 
+// ─── Live Clock In/Out (today's punch, self-service) ─────────────────────────
+
+export interface ClockState {
+  checkInAt?: string;
+  checkOutAt?: string;
+}
+
+const liveClockState: Record<string, ClockState> = {
+  'EMP-10241': { checkInAt: '09:12 AM' },
+};
+
+const clockListeners: Array<() => void> = [];
+
+function notifyClockListeners() {
+  clockListeners.forEach((l) => l());
+}
+
+export function subscribeClock(listener: () => void): () => void {
+  clockListeners.push(listener);
+  return () => {
+    const idx = clockListeners.indexOf(listener);
+    if (idx !== -1) clockListeners.splice(idx, 1);
+  };
+}
+
+export function getTodayClockState(employeeId: string): ClockState | null {
+  return liveClockState[employeeId] ?? null;
+}
+
+function formatNow(): string {
+  return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+export function clockIn(employeeId: string): ClockState {
+  const existing = liveClockState[employeeId];
+  if (existing?.checkInAt) {
+    throw new Error('You have already checked in today.');
+  }
+  const state: ClockState = { checkInAt: formatNow() };
+  liveClockState[employeeId] = state;
+  notifyClockListeners();
+  return state;
+}
+
+export function clockOut(employeeId: string): ClockState {
+  const existing = liveClockState[employeeId];
+  if (!existing?.checkInAt) {
+    throw new Error('You have not checked in today.');
+  }
+  if (existing.checkOutAt) {
+    throw new Error('You have already checked out today.');
+  }
+  const state: ClockState = { ...existing, checkOutAt: formatNow() };
+  liveClockState[employeeId] = state;
+  notifyClockListeners();
+  return state;
+}
+
 /**
  * Returns all employees that a user can view attendance for.
  * - If `canReadGroup`: all employees

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftIcon, ChevronDownIcon, PencilIcon } from 'lucide-react';
+import { ArrowLeftIcon, ChevronDownIcon, PencilIcon, WalletIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel, KeyValue } from '../components/ui/Panel';
 import { Tabs } from '../components/ui/Tabs';
@@ -10,14 +10,21 @@ import { ActivityTimeline } from '../components/ActivityTimeline';
 import { StateBlock } from '../components/ui/States';
 import { SensitiveField } from '../components/common/SensitiveField';
 import { AttendanceCalendar } from '../components/hr/AttendanceCalendar';
+import { PayslipModal } from '../components/hr/PayslipModal';
+import { SalaryStructureModal } from '../components/hr/SalaryStructureModal';
 import { employees } from '../data/people';
 import { activity } from '../data/system';
 import { group } from '../data/organization';
 import { recordAuditEvent } from '../data/system';
+import { getPayslipsForEmployee, getSalaryStructure, type Payslip } from '../data/payroll';
 import { useApp } from '../contexts/AppContext';
 import { useEntityScope } from '../contexts/EntityScopeContext';
 import { NotFound } from './NotFound';
 import { Unauthorized } from './Unauthorized';
+
+function money(n: number): string {
+  return `৳${Math.round(n).toLocaleString('en-IN')}`;
+}
 
 const TABS = [
 { id: 'overview', label: 'Overview' },
@@ -33,9 +40,16 @@ export function EmployeeDetail() {
   const { can, role } = useApp();
   const { canAccessCompany } = useEntityScope();
   const [tab, setTab] = useState('overview');
+  const [salaryModalOpen, setSalaryModalOpen] = useState(false);
+  const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
+  const [, setSalaryTick] = useState(0);
 
   const employee = employees.find((e) => e.id === id);
   if (!employee) return <NotFound />;
+
+  const canManagePayroll = can('payroll.manage');
+  const salaryStructure = getSalaryStructure(employee.id);
+  const payslips = getPayslipsForEmployee(employee.id);
 
   // ABAC Scope Enforcement: check if employee belongs to an authorized company
   if (!canAccessCompany(employee.company)) {
@@ -248,65 +262,121 @@ export function EmployeeDetail() {
 
         {tab === 'payroll' && (
         can('payroll.read') ?
-        <Panel title="Payroll history" bodyClassName="p-0">
-              <table className="w-full text-base">
-                <thead>
-                  <tr className="border-b border-line">
-                    {['Period', 'Gross', 'Deductions', 'Net pay', 'Status'].map((h) =>
-                <th key={h} className="px-4 py-2 text-left text-sm font-semibold uppercase tracking-wide text-faint">
-                        {h}
-                      </th>
-                )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-              ['September 2026', '118,000', '14,200', '103,800', 'processing'],
-              ['August 2026', '118,000', '14,200', '103,800', 'completed'],
-              ['July 2026', '112,000', '13,400', '98,600', 'completed']].
-              map((row) =>
-              <tr key={row[0]} className="border-b border-line/70 last:border-b-0">
-                      <td className="px-4 py-2 text-ink">{row[0]}</td>
-                      <td className="px-4 py-2 font-mono tabular text-ink">
+        <div className="space-y-4">
+            {salaryStructure &&
+            <Panel
+              title="Salary structure"
+              description={`Effective from ${salaryStructure.effectiveFrom}`}
+              actions={canManagePayroll && <Button size="xs" icon={WalletIcon} onClick={() => setSalaryModalOpen(true)}>Edit</Button>}
+              bodyClassName="p-0"
+            >
+                <table className="w-full text-base">
+                  <tbody>
+                    {[
+                  ['Basic Salary', salaryStructure.basic],
+                  ['House Rent Allowance', salaryStructure.houseRent],
+                  ['Medical Allowance', salaryStructure.medical],
+                  ['Conveyance Allowance', salaryStructure.conveyance],
+                  ['Other Allowance', salaryStructure.other]].
+                  map(([label, amount]) =>
+                  <tr key={label as string} className="border-b border-line/70 last:border-b-0">
+                        <td className="px-4 py-2 text-muted">{label}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular text-ink">
+                          <SensitiveField
+                      value={amount as number}
+                      permission="sensitive.salary.read"
+                      domain="salary"
+                      label={label as string}
+                      resourceName={`${employee.name} (${employee.id})`}
+                      companyName={employee.company}
+                      format="currency"
+                      mono />
+
+                        </td>
+                      </tr>
+                  )}
+                    <tr>
+                      <td className="px-4 py-2 font-semibold text-ink">Gross Monthly</td>
+                      <td className="px-4 py-2 text-right font-mono tabular font-semibold text-ink">
                         <SensitiveField
-                          value={row[1]}
-                          permission="sensitive.salary.read"
-                          domain="salary"
-                          label={`Gross Pay (${row[0]})`}
-                          resourceName={`${employee.name} (${employee.id})`}
-                          companyName={employee.company}
-                          format="currency"
-                          mono
-                        />
-                      </td>
-                      <td className="px-4 py-2 font-mono tabular text-muted">−৳{row[2]}</td>
-                      <td className="px-4 py-2 font-mono tabular text-ink">
-                        <SensitiveField
-                          value={row[3]}
-                          permission="sensitive.salary.read"
-                          domain="salary"
-                          label={`Net Pay (${row[0]})`}
-                          resourceName={`${employee.name} (${employee.id})`}
-                          companyName={employee.company}
-                          format="currency"
-                          mono
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <StatusBadge status={row[4] as 'completed'} />
+                      value={salaryStructure.grossMonthly}
+                      permission="sensitive.salary.read"
+                      domain="salary"
+                      label="Gross Monthly"
+                      resourceName={`${employee.name} (${employee.id})`}
+                      companyName={employee.company}
+                      format="currency"
+                      mono />
+
                       </td>
                     </tr>
-              )}
-                </tbody>
-              </table>
-            </Panel> :
+                  </tbody>
+                </table>
+              </Panel>
+            }
+
+            <Panel title="Payroll history" bodyClassName="p-0">
+              {payslips.length === 0 ?
+              <StateBlock variant="empty" title="No payslips yet" description="Payslips will appear here once payroll has been run for this employee's company." /> :
+              <table className="w-full text-base">
+                  <thead>
+                    <tr className="border-b border-line">
+                      {['Period', 'Gross', 'Deductions', 'Net pay', 'Status', ''].map((h) =>
+                  <th key={h} className="px-4 py-2 text-left text-sm font-semibold uppercase tracking-wide text-faint">
+                          {h}
+                        </th>
+                  )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payslips.map((p) =>
+                <tr key={p.id} className="border-b border-line/70 last:border-b-0">
+                        <td className="px-4 py-2 text-ink">{p.periodLabel}</td>
+                        <td className="px-4 py-2 font-mono tabular text-ink">
+                          <SensitiveField
+                      value={p.grossPay}
+                      permission="sensitive.salary.read"
+                      domain="salary"
+                      label={`Gross Pay (${p.periodLabel})`}
+                      resourceName={`${employee.name} (${employee.id})`}
+                      companyName={employee.company}
+                      format="currency"
+                      mono />
+
+                        </td>
+                        <td className="px-4 py-2 font-mono tabular text-muted">−{money(p.deductions.total)}</td>
+                        <td className="px-4 py-2 font-mono tabular text-ink">
+                          <SensitiveField
+                      value={p.netPay}
+                      permission="sensitive.salary.read"
+                      domain="salary"
+                      label={`Net Pay (${p.periodLabel})`}
+                      resourceName={`${employee.name} (${employee.id})`}
+                      companyName={employee.company}
+                      format="currency"
+                      mono />
+
+                        </td>
+                        <td className="px-4 py-2">
+                          <StatusBadge status={p.status} />
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <Button size="xs" onClick={() => setSelectedPayslip(p)}>View</Button>
+                        </td>
+                      </tr>
+                )}
+                  </tbody>
+                </table>
+              }
+            </Panel>
+          </div> :
 
         <div className="rounded-lg border border-line bg-subtle">
               <StateBlock
             variant="denied"
             title="Payroll is restricted"
             description="Viewing payroll for other employees requires the payroll.read permission, granted by HR or Group IT." />
-          
+
             </div>)
         }
 
@@ -320,6 +390,20 @@ export function EmployeeDetail() {
           </div>
         }
       </div>
+
+      <SalaryStructureModal
+        isOpen={salaryModalOpen}
+        employeeId={employee.id}
+        employeeName={employee.name}
+        companyName={employee.company}
+        onClose={() => setSalaryModalOpen(false)}
+        onSuccess={() => setSalaryTick((t) => t + 1)}
+      />
+      <PayslipModal
+        isOpen={Boolean(selectedPayslip)}
+        payslip={selectedPayslip}
+        onClose={() => setSelectedPayslip(null)}
+      />
     </div>);
 
 }

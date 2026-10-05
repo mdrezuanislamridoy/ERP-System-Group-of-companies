@@ -109,7 +109,10 @@ model Person {
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
-  user        User?
+  user              User?
+  attendanceRecords AttendanceRecord[]
+  salaryStructure   SalaryStructure?
+  payslips          Payslip[]
 
   @@map("persons")
 }
@@ -452,7 +455,107 @@ model WorkflowTask {
 }
 
 // ==========================================
-// 7. PLATFORM CORE: AUDIT, NUMBERS, SETTINGS
+// 7. HUMAN RESOURCES: ATTENDANCE & PAYROLL
+// ==========================================
+
+model AttendanceRecord {
+  id           String    @id @default(uuid())
+  personId     String    @map("person_id")
+  companyId    String    @map("company_id")
+  date         DateTime  @db.Date
+  status       String    @default("PRESENT") @db.VarChar(16) // PRESENT, LATE, ABSENT, ON_LEAVE, HALF_DAY
+  checkInAt    DateTime? @map("check_in_at")
+  checkOutAt   DateTime? @map("check_out_at")
+  workingHours Decimal?  @map("working_hours") @db.Decimal(5, 2)
+  note         String?   @db.VarChar(255)
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  person       Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, date])
+  @@index([companyId, date])
+  @@map("attendance_records")
+}
+
+model SalaryStructure {
+  id            String   @id @default(uuid())
+  personId      String   @unique @map("person_id")
+  companyId     String   @map("company_id")
+  basic         Decimal  @db.Decimal(19, 4)
+  houseRent     Decimal  @default(0) @map("house_rent") @db.Decimal(19, 4)
+  medical       Decimal  @default(0) @db.Decimal(19, 4)
+  conveyance    Decimal  @default(0) @db.Decimal(19, 4)
+  other         Decimal  @default(0) @db.Decimal(19, 4)
+  grossMonthly  Decimal  @map("gross_monthly") @db.Decimal(19, 4)
+  effectiveFrom DateTime @default(now()) @map("effective_from")
+  updatedBy     String?  @map("updated_by")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  person        Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("salary_structures")
+}
+
+model PayrollRun {
+  id               String    @id @default(uuid())
+  runNumber        String    @map("run_number") @db.VarChar(64)
+  companyId        String    @map("company_id")
+  periodMonth      Int       @map("period_month")
+  periodYear       Int       @map("period_year")
+  status           String    @default("PROCESSING") @db.VarChar(16) // PROCESSING, COMPLETED
+  employeeCount    Int       @default(0) @map("employee_count")
+  totalGross       Decimal   @default(0) @map("total_gross") @db.Decimal(19, 4)
+  totalDeductions  Decimal   @default(0) @map("total_deductions") @db.Decimal(19, 4)
+  totalNet         Decimal   @default(0) @map("total_net") @db.Decimal(19, 4)
+  generatedBy      String?   @map("generated_by")
+  processedBy      String?   @map("processed_by")
+  processedAt      DateTime? @map("processed_at")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  payslips         Payslip[]
+
+  @@unique([companyId, periodMonth, periodYear])
+  @@index([companyId, periodYear, periodMonth])
+  @@map("payroll_runs")
+}
+
+model Payslip {
+  id               String     @id @default(uuid())
+  payrollRunId     String     @map("payroll_run_id")
+  personId         String     @map("person_id")
+  basic            Decimal    @db.Decimal(19, 4)
+  houseRent        Decimal    @map("house_rent") @db.Decimal(19, 4)
+  medical          Decimal    @db.Decimal(19, 4)
+  conveyance       Decimal    @db.Decimal(19, 4)
+  other            Decimal    @db.Decimal(19, 4)
+  grossPay         Decimal    @map("gross_pay") @db.Decimal(19, 4)
+  workingDays      Int        @map("working_days")
+  presentDays      Int        @map("present_days")
+  lopDays          Int        @default(0) @map("lop_days")
+  providentFund    Decimal    @default(0) @map("provident_fund") @db.Decimal(19, 4)
+  taxDeduction     Decimal    @default(0) @map("tax_deduction") @db.Decimal(19, 4)
+  lopDeduction     Decimal    @default(0) @map("lop_deduction") @db.Decimal(19, 4)
+  totalDeductions  Decimal    @default(0) @map("total_deductions") @db.Decimal(19, 4)
+  netPay           Decimal    @map("net_pay") @db.Decimal(19, 4)
+  status           String     @default("PROCESSING") @db.VarChar(16) // PROCESSING, COMPLETED
+
+  createdAt        DateTime   @default(now()) @map("created_at")
+
+  payrollRun       PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  person           Person     @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([payrollRunId, personId])
+  @@index([personId])
+  @@map("payslips")
+}
+
+// ==========================================
+// 8. PLATFORM CORE: AUDIT, NUMBERS, SETTINGS
 // ==========================================
 
 model AuditLog {

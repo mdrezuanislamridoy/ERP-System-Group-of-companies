@@ -139,3 +139,25 @@ body *::after {
     display: none !important;
   }
 }
+
+/* Payslip print/PDF view — same mechanism as the PO print view above, scoped to
+   #payslip-print-area so it can coexist on a page that also mounts a PO modal. */
+@media print {
+  #payslip-print-area,
+  #payslip-print-area * {
+    visibility: visible;
+  }
+  #payslip-print-area {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+  #payslip-print-area .payslip-no-print {
+    display: none !important;
+  }
+}

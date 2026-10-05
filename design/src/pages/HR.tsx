@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { ClockIcon, SearchIcon, UserIcon } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { ClockIcon, PlayIcon, SearchIcon, UserIcon, WalletIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/ui/Panel';
 import { Tabs } from '../components/ui/Tabs';
@@ -7,13 +8,30 @@ import { Metric, MetricRow } from '../components/ui/Metric';
 import { Button } from '../components/ui/Button';
 import { Badge, StatusBadge } from '../components/ui/StatusBadge';
 import { StateBlock } from '../components/ui/States';
+import { SensitiveField } from '../components/common/SensitiveField';
 import { AttendanceCalendar } from '../components/hr/AttendanceCalendar';
+import { PayslipModal } from '../components/hr/PayslipModal';
+import { RunPayrollModal } from '../components/hr/RunPayrollModal';
 import { attendanceToday, employees, leaveRequests } from '../data/people';
-import { getViewableEmployees } from '../data/attendance';
+import { clockIn, clockOut, getTodayClockState, getViewableEmployees, subscribeClock } from '../data/attendance';
+import {
+  finalizePayrollRun,
+  getPayrollRuns,
+  getPayslipsForEmployee,
+  getPayslipsForRun,
+  getSalaryStructure,
+  subscribePayroll,
+  type Payslip,
+} from '../data/payroll';
+import { recordAuditEvent } from '../data/system';
 import { branches, group } from '../data/organization';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../utils/cn';
+
+function money(n: number): string {
+  return `৳${Math.round(n).toLocaleString('en-IN')}`;
+}
 
 // Per-branch attendance detail, keyed to the branch record so it always travels with the
 // company it belongs to (see data/organization.ts) instead of living as a separate literal list.
@@ -28,7 +46,8 @@ const BRANCH_ATTENDANCE: Record<string, {present: number;late: number;onLeave: n
 export function HR() {
   const { role, can, companyId, companyName } = useApp();
   const { user } = useAuth();
-  const [tab, setTab] = useState('attendance');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(searchParams.get('tab') || 'attendance');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [employeeSearch, setEmployeeSearch] = useState('');
 
@@ -37,10 +56,60 @@ export function HR() {
   const canManageWorkforce = can('employee.read');
   const groupScoped = can('group.read');
 
+  // Payroll visibility/authority is a distinct grant — a Company CFO holds payroll.read
+  // without employee.read, so the company payroll register must not be gated on the latter.
+  const canViewCompanyPayroll = can('payroll.read');
+  const canManagePayroll = can('payroll.manage');
+
   const companyBranches = branches.filter((b) => groupScoped || b.companyId === companyId);
 
   // Resolve current user's employee ID
   const myEmployeeId = user?.employeeId || 'EMP-10241';
+
+  // Live clock in/out state for the self-service strip
+  const [clockState, setClockState] = useState(() => getTodayClockState(myEmployeeId));
+  const [clockError, setClockError] = useState<string | null>(null);
+  useEffect(() => subscribeClock(() => setClockState(getTodayClockState(myEmployeeId))), [myEmployeeId]);
+
+  const handleClockAction = () => {
+    try {
+      setClockError(null);
+      if (!clockState?.checkInAt) {
+        clockIn(myEmployeeId);
+      } else if (!clockState.checkOutAt) {
+        clockOut(myEmployeeId);
+      }
+    } catch (err) {
+      setClockError(err instanceof Error ? err.message : 'Failed to record attendance.');
+    }
+  };
+
+  // Payroll register state (company view) + self-service payslip state
+  const [, setPayrollTick] = useState(0);
+  useEffect(() => subscribePayroll(() => setPayrollTick((t) => t + 1)), []);
+  const payrollRuns = getPayrollRuns(companyName, groupScoped);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [runModalOpen, setRunModalOpen] = useState(false);
+  const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
+  const runPayslips = selectedRunId ? getPayslipsForRun(selectedRunId) : [];
+  const myPayslips = getPayslipsForEmployee(myEmployeeId);
+  const mySalaryStructure = getSalaryStructure(myEmployeeId);
+
+  const handleFinalizeRun = (runId: string) => {
+    try {
+      const run = finalizePayrollRun(runId, role.user || 'Unknown User');
+      recordAuditEvent({
+        user: role.user || 'Unknown User',
+        action: 'PAYROLL_RUN_FINALIZED',
+        resource: `${run.id} · ${run.periodLabel}`,
+        company: run.company,
+        before: 'Processing',
+        after: `Completed · Net ${money(run.totalNet)} disbursed to ${run.employeeCount} employees`,
+      });
+    } catch {
+      // Already finalized by another actor — the row will simply reflect current status.
+    }
+  };
 
   // Get employees this user can view attendance for
   const viewableEmployees = getViewableEmployees(myEmployeeId, companyName, canManageWorkforce, groupScoped);
@@ -86,7 +155,8 @@ export function HR() {
         <Tabs
           tabs={[
           { id: 'attendance', label: 'Attendance' },
-          { id: 'leave', label: 'Leave', count: canManageWorkforce ? scopedLeaveRequests.length : myLeaveRequests.length }]
+          { id: 'leave', label: 'Leave', count: canManageWorkforce ? scopedLeaveRequests.length : myLeaveRequests.length },
+          { id: 'payroll', label: 'Payroll', count: canViewCompanyPayroll ? payrollRuns.length : myPayslips.length }]
           }
           active={tab}
           onChange={setTab} />
@@ -235,12 +305,27 @@ export function HR() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm font-medium text-muted">Your attendance today</p>
-                    <p className="mt-1 font-mono text-3xl font-semibold leading-none text-ink">09:12 AM</p>
-                    <p className="mt-1.5 text-base text-muted">Checked in · Corporate HQ — Gulshan</p>
+                    <p className="mt-1 font-mono text-3xl font-semibold leading-none text-ink">
+                      {clockState?.checkOutAt ?? clockState?.checkInAt ?? '—:—'}
+                    </p>
+                    <p className="mt-1.5 text-base text-muted">
+                      {clockState?.checkOutAt
+                        ? `Checked out · in at ${clockState.checkInAt}`
+                        : clockState?.checkInAt
+                          ? 'Checked in · Corporate HQ — Gulshan'
+                          : 'Not checked in yet'}
+                    </p>
+                    {clockError && <p className="mt-1 text-sm text-danger">{clockError}</p>}
                   </div>
-                  <Button variant="danger" icon={ClockIcon}>
-                    Check out
-                  </Button>
+                  {!clockState?.checkOutAt && (
+                    <Button
+                      variant={clockState?.checkInAt ? 'danger' : 'primary'}
+                      icon={ClockIcon}
+                      onClick={handleClockAction}
+                    >
+                      {clockState?.checkInAt ? 'Check out' : 'Check in'}
+                    </Button>
+                  )}
                 </div>
               </section>
               <Panel title="Leave balance" bodyClassName="p-4">
@@ -364,7 +449,183 @@ export function HR() {
           }
           </Panel>
         }
+
+        {tab === 'payroll' &&
+        (canViewCompanyPayroll ?
+        <div className="space-y-4">
+            <MetricRow columns={3}>
+              <Metric label="Payroll runs" value={String(payrollRuns.length)} sub={groupScoped ? 'Group-wide' : companyName} />
+              <Metric
+                label="Total net disbursed"
+                value={money(payrollRuns.reduce((s, r) => s + r.totalNet, 0))}
+                sub="Across all runs"
+                emphasis
+              />
+              <Metric
+                label="Pending finalization"
+                value={String(payrollRuns.filter((r) => r.status === 'processing').length)}
+                tone={payrollRuns.some((r) => r.status === 'processing') ? 'warning' : 'neutral'}
+                sub="Runs awaiting disbursement"
+              />
+            </MetricRow>
+
+            <Panel
+              title="Payroll runs"
+              description={groupScoped ? 'Payroll history across the group' : `Payroll history for ${companyName}`}
+              actions={canManagePayroll && <Button variant="primary" icon={PlayIcon} onClick={() => setRunModalOpen(true)}>Run payroll</Button>}
+              bodyClassName="p-0"
+            >
+              {payrollRuns.length === 0 ?
+              <StateBlock variant="empty" title="No payroll runs yet" description="Run payroll for a period to generate payslips for every salaried employee in scope." /> :
+              <table className="w-full text-base">
+                  <thead>
+                    <tr className="border-b border-line">
+                      {['Period', ...(groupScoped ? ['Company'] : []), 'Employees', 'Gross', 'Deductions', 'Net pay', 'Status', ''].map((h, i) =>
+                  <th key={h + i} className="px-4 py-2 text-left text-sm font-semibold uppercase tracking-wide text-faint">
+                          {h}
+                        </th>
+                  )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payrollRuns.map((run) =>
+                <tr key={run.id} className="border-b border-line/70 last:border-b-0 hover:bg-surface">
+                        <td className="px-4 py-2 text-ink">{run.periodLabel}</td>
+                        {groupScoped && <td className="px-4 py-2 text-muted">{run.company}</td>}
+                        <td className="px-4 py-2 font-mono tabular text-muted">{run.employeeCount}</td>
+                        <td className="px-4 py-2 font-mono tabular text-ink">{money(run.totalGross)}</td>
+                        <td className="px-4 py-2 font-mono tabular text-muted">−{money(run.totalDeductions)}</td>
+                        <td className="px-4 py-2 font-mono tabular text-ink">{money(run.totalNet)}</td>
+                        <td className="px-4 py-2"><StatusBadge status={run.status} /></td>
+                        <td className="px-4 py-2 text-right">
+                          <span className="flex justify-end gap-1.5">
+                            <Button size="xs" onClick={() => setSelectedRunId(selectedRunId === run.id ? null : run.id)}>
+                              {selectedRunId === run.id ? 'Hide payslips' : 'View payslips'}
+                            </Button>
+                            {run.status === 'processing' && canManagePayroll &&
+                        <Button size="xs" variant="success" onClick={() => handleFinalizeRun(run.id)}>
+                                Finalize & disburse
+                              </Button>
+                        }
+                          </span>
+                        </td>
+                      </tr>
+                )}
+                  </tbody>
+                </table>
+              }
+            </Panel>
+
+            {selectedRunId &&
+            <Panel title={`Payslips — ${payrollRuns.find((r) => r.id === selectedRunId)?.periodLabel ?? ''}`} bodyClassName="p-0">
+                <table className="w-full text-base">
+                  <thead>
+                    <tr className="border-b border-line">
+                      {['Employee', 'Department', 'Gross', 'Deductions', 'Net pay', 'Status', ''].map((h, i) =>
+                  <th key={h + i} className="px-4 py-2 text-left text-sm font-semibold uppercase tracking-wide text-faint">
+                          {h}
+                        </th>
+                  )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runPayslips.map((p) =>
+                <tr key={p.id} className="border-b border-line/70 last:border-b-0 hover:bg-surface">
+                        <td className="px-4 py-2">
+                          <p className="text-ink">{p.employeeName}</p>
+                          <p className="font-mono text-sm text-muted">{p.employeeId}</p>
+                        </td>
+                        <td className="px-4 py-2 text-muted">{p.department}</td>
+                        <td className="px-4 py-2 font-mono tabular text-ink">
+                          <SensitiveField value={p.grossPay} permission="sensitive.salary.read" domain="salary" label="Gross Pay" resourceName={`${p.employeeName} (${p.employeeId})`} companyName={p.company} format="currency" mono />
+                        </td>
+                        <td className="px-4 py-2 font-mono tabular text-muted">−{money(p.deductions.total)}</td>
+                        <td className="px-4 py-2 font-mono tabular text-ink">
+                          <SensitiveField value={p.netPay} permission="sensitive.salary.read" domain="salary" label="Net Pay" resourceName={`${p.employeeName} (${p.employeeId})`} companyName={p.company} format="currency" mono />
+                        </td>
+                        <td className="px-4 py-2"><StatusBadge status={p.status} /></td>
+                        <td className="px-4 py-2 text-right">
+                          <Button size="xs" onClick={() => setSelectedPayslip(p)}>View</Button>
+                        </td>
+                      </tr>
+                )}
+                  </tbody>
+                </table>
+              </Panel>
+            }
+          </div> :
+
+        <div className="space-y-4">
+            {mySalaryStructure &&
+            <Panel title="My salary structure" description="Effective monthly breakdown" bodyClassName="p-0">
+                <table className="w-full text-base">
+                  <tbody>
+                    {[
+                  ['Basic Salary', mySalaryStructure.basic],
+                  ['House Rent Allowance', mySalaryStructure.houseRent],
+                  ['Medical Allowance', mySalaryStructure.medical],
+                  ['Conveyance Allowance', mySalaryStructure.conveyance],
+                  ['Other Allowance', mySalaryStructure.other]].
+                  map(([label, amount]) =>
+                  <tr key={label as string} className="border-b border-line/70 last:border-b-0">
+                        <td className="px-4 py-2 text-muted">{label}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular text-ink">{money(amount as number)}</td>
+                      </tr>
+                  )}
+                    <tr>
+                      <td className="px-4 py-2 font-semibold text-ink">Gross Monthly</td>
+                      <td className="px-4 py-2 text-right font-mono tabular font-semibold text-ink">{money(mySalaryStructure.grossMonthly)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </Panel>
+            }
+
+            <Panel title="My payslips" description="Your payroll history — visible only to you" bodyClassName="p-0">
+              {myPayslips.length === 0 ?
+              <StateBlock variant="empty" title="No payslips yet" description="Payslips will appear here once payroll has been run for your company." /> :
+              <table className="w-full text-base">
+                  <thead>
+                    <tr className="border-b border-line">
+                      {['Period', 'Gross', 'Deductions', 'Net pay', 'Status', ''].map((h, i) =>
+                  <th key={h + i} className="px-4 py-2 text-left text-sm font-semibold uppercase tracking-wide text-faint">
+                          {h}
+                        </th>
+                  )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myPayslips.map((p) =>
+                <tr key={p.id} className="border-b border-line/70 last:border-b-0 hover:bg-surface">
+                        <td className="px-4 py-2 text-ink">{p.periodLabel}</td>
+                        <td className="px-4 py-2 font-mono tabular text-ink">{money(p.grossPay)}</td>
+                        <td className="px-4 py-2 font-mono tabular text-muted">−{money(p.deductions.total)}</td>
+                        <td className="px-4 py-2 font-mono tabular text-ink">{money(p.netPay)}</td>
+                        <td className="px-4 py-2"><StatusBadge status={p.status} /></td>
+                        <td className="px-4 py-2 text-right">
+                          <Button size="xs" icon={WalletIcon} onClick={() => setSelectedPayslip(p)}>View</Button>
+                        </td>
+                      </tr>
+                )}
+                  </tbody>
+                </table>
+              }
+            </Panel>
+          </div>)
+        }
       </div>
+
+      <RunPayrollModal
+        isOpen={runModalOpen}
+        onClose={() => setRunModalOpen(false)}
+        lockedCompany={companyName}
+        groupScoped={groupScoped}
+      />
+      <PayslipModal
+        isOpen={Boolean(selectedPayslip)}
+        payslip={selectedPayslip}
+        onClose={() => setSelectedPayslip(null)}
+      />
     </div>);
 
 }
