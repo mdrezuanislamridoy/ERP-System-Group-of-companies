@@ -52,7 +52,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const json = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+    // Only a *rejected* token means the session was actually revoked/expired. A 401 with no
+    // token attached just means this optional backend call isn't authenticated yet (e.g. the
+    // user is on a local mock-directory session) — that must not blow away a valid session.
+    if (response.status === 401 && token && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
       localStorage.removeItem(TOKEN_STORAGE_KEY);
       localStorage.removeItem(REFRESH_TOKEN_KEY);
       window.dispatchEvent(new CustomEvent('okobiz:unauthorized'));

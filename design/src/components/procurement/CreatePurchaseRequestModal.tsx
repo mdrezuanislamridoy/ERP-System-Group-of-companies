@@ -36,10 +36,6 @@ export function CreatePurchaseRequestModal({
   const [priority, setPriority] = useState<'Low' | 'Normal' | 'High' | 'Critical'>('Normal');
   const [amount, setAmount] = useState('');
 
-  if (!isOpen) return null;
-
-  const targetCompany = companies.find((c) => c.id === selectedCompanyId) || companies[0];
-
   const availableCostCenters = useMemo(
     () =>
       costCenters.filter(
@@ -50,6 +46,10 @@ export function CreatePurchaseRequestModal({
       ),
     [selectedCompanyId]
   );
+
+  if (!isOpen) return null;
+
+  const targetCompany = companies.find((c) => c.id === selectedCompanyId) || companies[0];
 
   const handleCompanyChange = (coId: string) => {
     setSelectedCompanyId(coId);

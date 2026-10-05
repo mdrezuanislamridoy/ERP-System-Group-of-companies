@@ -164,8 +164,8 @@ export function HR() {
       </div>
 
       <div className="space-y-4 p-6">
-        {tab === 'attendance' ?
-        canManageWorkforce ?
+        {tab === 'attendance' &&
+        (canManageWorkforce ?
         <>
             <MetricRow>
               {attendanceToday.map((a) =>
@@ -350,10 +350,11 @@ export function HR() {
             <Panel title="My Monthly Attendance" description="Your day-wise attendance register for the current period">
               <AttendanceCalendar employeeId={myEmployeeId} />
             </Panel>
-          </div> :
+          </div>)
+        }
 
-
-        canManageWorkforce ?
+        {tab === 'leave' &&
+        (canManageWorkforce ?
         <Panel
           title="Leave requests"
           description={`Current and recent leave within ${companyName}`}
@@ -447,7 +448,7 @@ export function HR() {
                 </tbody>
               </table>
           }
-          </Panel>
+          </Panel>)
         }
 
         {tab === 'payroll' &&
