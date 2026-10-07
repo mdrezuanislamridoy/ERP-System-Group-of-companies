@@ -13,6 +13,7 @@ import { useApp } from '../contexts/AppContext';
 import { cn } from '../utils/cn';
 import { iamApi } from '../api/client';
 import { CreateEmployeeModal } from '../components/iam/CreateEmployeeModal';
+import { EditRolePermissionsModal, type BackendRole, type BackendPermission } from '../components/iam/EditRolePermissionsModal';
 
 const ALL_ROLES = Object.values(roleTemplates);
 
@@ -33,6 +34,25 @@ export function IAM() {
   const [tab, setTab] = useState('users');
   const [allUsers, setAllUsers] = useState<DirectoryUser[]>(directoryUsers);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [backendRoles, setBackendRoles] = useState<BackendRole[]>([]);
+  const [backendPermissions, setBackendPermissions] = useState<BackendPermission[]>([]);
+  const [editingRole, setEditingRole] = useState<BackendRole | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([iamApi.getRoles(), iamApi.getPermissions()])
+      .then(([roles, permissions]) => {
+        if (!active) return;
+        setBackendRoles(roles || []);
+        setBackendPermissions(permissions || []);
+      })
+      .catch(() => {
+        // Offline/demo session — fall back to the static role template catalog below.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -202,7 +222,10 @@ export function IAM() {
 
         {tab === 'roles' &&
         <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-            {visibleRoles.map((r) =>
+            {visibleRoles.map((r) => {
+              const backendRole = backendRoles.find((br) => br.key === r.key);
+              const permissionCount = backendRole ? backendRole.permissions.length : r.permissions.length;
+              return (
           <div key={r.key} className="rounded-lg border border-line bg-subtle p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -217,14 +240,22 @@ export function IAM() {
                     Users <span className="ml-1 font-mono tabular text-ink">{usersForRole(r.key)}</span>
                   </span>
                   <span className="text-muted">
-                    Permissions <span className="ml-1 font-mono tabular text-ink">{r.permissions.length}</span>
+                    Permissions <span className="ml-1 font-mono tabular text-ink">{permissionCount}</span>
                   </span>
-                  <Button size="xs" variant="ghost" className="ml-auto">
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="ml-auto"
+                    disabled={!backendRole || backendPermissions.length === 0}
+                    title={backendRole ? undefined : 'No server-side role record — demo-only role template, nothing to persist.'}
+                    onClick={() => backendRole && setEditingRole(backendRole)}
+                  >
                     Edit
                   </Button>
                 </div>
               </div>
-          )}
+              );
+            })}
           </div>
         }
 
@@ -296,6 +327,16 @@ export function IAM() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={handleUserCreated}
+      />
+
+      <EditRolePermissionsModal
+        isOpen={editingRole !== null}
+        role={editingRole}
+        allPermissions={backendPermissions}
+        onClose={() => setEditingRole(null)}
+        onSuccess={(updated) => {
+          setBackendRoles((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+        }}
       />
     </div>
   );

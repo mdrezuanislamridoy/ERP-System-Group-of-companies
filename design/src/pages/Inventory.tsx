@@ -64,7 +64,7 @@ const TRANSFER_STATUS_TONE: Record<string, 'neutral' | 'info' | 'warning' | 'suc
 export function Inventory() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { density, companyName, role } = useApp();
+  const { density, companyName, companyId, can, role } = useApp();
 
   const [tab, setTab] = useState(
     location.pathname.includes('warehouses')
@@ -165,12 +165,18 @@ export function Inventory() {
     return Math.ceil((expMs - todayMs) / (1000 * 3600 * 24));
   };
 
+  // Company-scoped stock: a company-isolated user only sees their own legal entity's inventory,
+  // never another sister concern's (group-level roles / 'group.read' see everything, unfiltered).
+  const scopedStock = can('group.read') || !companyId || companyId === '*' || companyId === 'all'
+    ? stock
+    : stock.filter((s) => s.companyId === companyId || s.companyId === companyId.replace(/^c-/, 'le-') || s.companyId === companyId.replace(/^le-/, 'c-'));
+
   // Aggregated Metrics
-  const totalValue = stock.reduce((sum, s) => sum + s.value, 0);
-  const totalOnHand = stock.reduce((sum, s) => sum + s.onHand, 0);
-  const totalAtp = stock.reduce((sum, s) => sum + s.atp, 0);
-  const totalQuarantine = stock.reduce((sum, s) => sum + s.quarantineQty, 0);
-  const totalInTransit = stock.reduce((sum, s) => sum + s.inTransitQty, 0);
+  const totalValue = scopedStock.reduce((sum, s) => sum + s.value, 0);
+  const totalOnHand = scopedStock.reduce((sum, s) => sum + s.onHand, 0);
+  const totalAtp = scopedStock.reduce((sum, s) => sum + s.atp, 0);
+  const totalQuarantine = scopedStock.reduce((sum, s) => sum + s.quarantineQty, 0);
+  const totalInTransit = scopedStock.reduce((sum, s) => sum + s.inTransitQty, 0);
   const urgentBatchesCount = batches.filter((b) => getBatchDaysRemaining(b.expiryDate) <= 30).length;
 
   // Filtered batches
@@ -348,7 +354,7 @@ export function Inventory() {
       <div className="px-6">
         <Tabs
           tabs={[
-            { id: 'stock', label: 'Stock Positions & ATP', count: stock.length },
+            { id: 'stock', label: 'Stock Positions & ATP', count: scopedStock.length },
             { id: 'batches', label: 'Batches & Expiry (FEFO)', count: batches.length },
             { id: 'transfers', label: 'Stock Transfers', count: transfers.length },
             { id: 'grn', label: 'Goods Receipt (GRN)', count: grns.length },
@@ -402,7 +408,7 @@ export function Inventory() {
             </div>
 
             <DataTable
-              rows={stock}
+              rows={scopedStock}
               columns={stockColumns}
               getId={(s) => s.id}
               density={density}
@@ -861,7 +867,7 @@ export function Inventory() {
       {/* Stock Adjustment & Scrap Write-Off Modal */}
       <StockAdjustmentModal
         isOpen={isAdjustOpen}
-        stockItems={stock}
+        stockItems={scopedStock}
         initialStockId={adjustTargetStockId}
         onClose={() => setIsAdjustOpen(false)}
       />
