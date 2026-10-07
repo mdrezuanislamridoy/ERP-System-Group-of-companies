@@ -59,7 +59,7 @@ export function GroupDashboard() {
       <PageHeader
         crumbs={[{ label: group.name }, { label: 'Group Overview' }]}
         title="Group Overview"
-        description="Consolidated performance across 24 operating companies, FY2026 to date."
+        description={`Consolidated performance across ${companies.length} operating companies, FY2026 to date.`}
         meta={
         <>
             <Badge tone="accent">Group scope</Badge>
@@ -94,7 +94,7 @@ export function GroupDashboard() {
                   <p className="text-sm text-muted">Top 6 contributors by revenue. Select a company to drill into its dashboard.</p>
                 </div>
                 <Button variant="ghost" size="xs" onClick={() => navigate('/companies')}>
-                  All 24 companies
+                  All {companies.length} companies
                 </Button>
               </div>
               <DataTable

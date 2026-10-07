@@ -496,6 +496,8 @@ export interface ItemBatch {
 
 export interface StockItem {
   id: string;
+  /** Legal entity this stock item belongs to — e.g. 'c-foods'. Drives per-company inventory valuation and isolation. */
+  companyId: string;
   product: string;
   sku: string;
   warehouse: string;

@@ -11,6 +11,7 @@ import { AuditService } from '../audit/audit.service';
 import { AbacPolicyService } from '../auth/services/abac-policy.service';
 import { RequestContext, ScopeMode } from '../../common/interfaces/request-context.interface';
 import { CreateEmployeeUserDto } from './dto/create-employee-user.dto';
+import { UpdateRolePermissionsDto } from './dto/update-role-permissions.dto';
 
 @Injectable()
 export class IamService {
@@ -241,6 +242,90 @@ export class IamService {
   async getPermissions() {
     return this.prisma.permission.findMany({
       orderBy: [{ moduleKey: 'asc' }, { resource: 'asc' }],
+    });
+  }
+
+  /**
+   * Replaces a role's full permission set. Restricted to callers who already hold
+   * `iam.roles.manage`; additionally enforces:
+   *  - no self-elevation: a non-group-admin cannot grant a permission they don't hold themselves
+   *  - the `group-super-admin` role itself can only be edited by a group admin
+   * Every user currently assigned this role has their `permissionsVersion` bumped so their
+   * existing JWT is immediately invalidated and the new permission set takes effect on next login.
+   */
+  async updateRolePermissions(roleId: string, dto: UpdateRolePermissionsDto, ctx: RequestContext) {
+    const callerScope = ctx.scope;
+    if (!callerScope || !ctx.user) {
+      throw new ForbiddenException('Authentication context required to manage role permissions.');
+    }
+
+    const role = await this.prisma.role.findUnique({
+      where: { id: roleId },
+      include: { permissions: { include: { permission: true } } },
+    });
+    if (!role) {
+      throw new NotFoundException(`Role with ID "${roleId}" not found.`);
+    }
+
+    const isGroupAdmin = callerScope.roleKey === 'group-super-admin' || callerScope.roleKey === 'group-ceo';
+
+    if (role.key === 'group-super-admin' && !isGroupAdmin) {
+      throw new ForbiddenException({
+        code: 'PRIVILEGE_ESCALATION_BLOCKED',
+        message: 'Only a Group Super Admin may modify the Group Super Admin role.',
+      });
+    }
+
+    const uniqueKeys = Array.from(new Set(dto.permissionKeys));
+    const permissions = await this.prisma.permission.findMany({
+      where: { key: { in: uniqueKeys } },
+    });
+
+    const foundKeys = new Set(permissions.map((p) => p.key));
+    const unknownKeys = uniqueKeys.filter((k) => !foundKeys.has(k));
+    if (unknownKeys.length > 0) {
+      throw new NotFoundException(`Unknown permission key(s): ${unknownKeys.join(', ')}`);
+    }
+
+    if (!isGroupAdmin) {
+      const callerPermissions = new Set(ctx.user.permissions);
+      const ungranted = uniqueKeys.filter((k) => !callerPermissions.has(k));
+      if (ungranted.length > 0) {
+        throw new ForbiddenException({
+          code: 'PRIVILEGE_ESCALATION_BLOCKED',
+          message: `Cannot grant permission(s) you do not hold yourself: ${ungranted.join(', ')}`,
+        });
+      }
+    }
+
+    const oldKeys = role.permissions.map((rp) => rp.permission.key);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.rolePermission.deleteMany({ where: { roleId } });
+      if (permissions.length > 0) {
+        await tx.rolePermission.createMany({
+          data: permissions.map((p) => ({ roleId, permissionId: p.id, effect: 'ALLOW' })),
+        });
+      }
+
+      await tx.user.updateMany({
+        where: { assignments: { some: { roleId } } },
+        data: { permissionsVersion: { increment: 1 } },
+      });
+    });
+
+    await this.auditService.log({
+      action: 'ROLE_PERMISSIONS_UPDATED',
+      resource: 'role',
+      resourceId: roleId,
+      oldValue: { permissions: oldKeys },
+      newValue: { permissions: uniqueKeys },
+      ctx,
+    });
+
+    return this.prisma.role.findUnique({
+      where: { id: roleId },
+      include: { permissions: { include: { permission: true } } },
     });
   }
 }

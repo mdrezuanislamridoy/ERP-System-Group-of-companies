@@ -63,23 +63,34 @@ type TabId = 'all' | 'procurement' | 'hr' | 'finance' | 'delegated';
 
 export function Approvals() {
   const navigate = useNavigate();
-  const { role, can } = useApp();
+  const { role, can, companyId, companyName } = useApp();
   const [tab, setTab] = useState<TabId>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | ApprovalItem['priority']>('all');
-  const [items, setItems] = useState<ApprovalItem[]>(getApprovalInbox());
+  const [allItems, setAllItems] = useState<ApprovalItem[]>(getApprovalInbox());
+
+  // A company-isolated approver only ever sees approval items for their own company —
+  // group-level roles ('group.read') see the unified cross-company inbox.
+  const items = can('group.read') || !companyId || companyId === '*' || companyId === 'all'
+    ? allItems
+    : allItems.filter((i) =>
+        i.company === companyName ||
+        i.companyId === companyId ||
+        i.companyId === companyId.replace(/^c-/, 'le-') ||
+        i.companyId === companyId.replace(/^le-/, 'c-')
+      );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [drawerItemId, setDrawerItemId] = useState<string | null>(null);
   const [decisionTarget, setDecisionTarget] = useState<{ items: ApprovalItem[]; decision: 'approved' | 'rejected' } | null>(null);
   const [delegations, setDelegations] = useState<DelegationRule[]>(getDelegationRules());
   const [isDelegationModalOpen, setIsDelegationModalOpen] = useState(false);
 
-  useEffect(() => subscribeApprovalInbox(() => setItems(getApprovalInbox())), []);
+  useEffect(() => subscribeApprovalInbox(() => setAllItems(getApprovalInbox())), []);
   useEffect(() => subscribeDelegations(() => setDelegations(getDelegationRules())), []);
 
   // SLA countdowns and auto-escalation are time-based, not action-based — refresh periodically so
   // badges tick down and newly-breaching items escalate without requiring a manual action first.
   useEffect(() => {
-    const interval = setInterval(() => setItems(getApprovalInbox()), 60000);
+    const interval = setInterval(() => setAllItems(getApprovalInbox()), 60000);
     return () => clearInterval(interval);
   }, []);
 
