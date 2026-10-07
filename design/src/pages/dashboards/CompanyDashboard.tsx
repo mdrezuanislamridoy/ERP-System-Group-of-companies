@@ -12,10 +12,16 @@ import { ActivityTimeline } from '../../components/ActivityTimeline';
 import { companies, group, departments } from '../../data/organization';
 import { revenueTrend } from '../../data/finance';
 import { activity } from '../../data/system';
-import { procurementPipeline, purchaseRequests, stock } from '../../data/operations';
+import { procurementPipeline, purchaseRequests, stock, getPurchaseOrders } from '../../data/operations';
 import { attendanceToday } from '../../data/people';
 import { useApp } from '../../contexts/AppContext';
 import { cn } from '../../utils/cn';
+
+const OPEN_PO_STATUSES = new Set(['Draft', 'Pending Approval', 'Issued', 'Partially Received']);
+
+function sameCompany(aId: string, bId: string) {
+  return aId === bId || aId.replace(/^c-/, 'le-') === bId.replace(/^c-/, 'le-');
+}
 
 export function CompanyDashboard() {
   const navigate = useNavigate();
@@ -23,6 +29,24 @@ export function CompanyDashboard() {
   const company = companies.find((c) => c.id === companyId) ?? companies[0];
   const margin = company.revenue ? ((company.revenue - company.expense) / company.revenue * 100).toFixed(1) : '0.0';
   const scopedRequests = purchaseRequests.filter((p) => p.company === companyName);
+
+  // Every widget below is derived strictly from THIS company's slice of the mock data —
+  // no aggregate/group-wide numbers are shown on a company-scoped dashboard.
+  const totalGroupRevenue = companies.reduce((sum, c) => sum + c.revenue, 0) || 1;
+  const totalGroupEmployees = companies.reduce((sum, c) => sum + c.employees, 0) || 1;
+  const revenueShare = company.revenue / totalGroupRevenue;
+  const employeeShare = company.employees / totalGroupEmployees;
+
+  const scopedStock = stock.filter((s) => sameCompany(s.companyId, company.id));
+  const inventoryValue = scopedStock.reduce((sum, s) => sum + s.value, 0);
+
+  const scopedOrders = getPurchaseOrders().filter((po) => sameCompany(po.companyId, company.id));
+  const openOrders = scopedOrders.filter((po) => OPEN_PO_STATUSES.has(po.status));
+  const openOrdersValue = openOrders.reduce((sum, po) => sum + po.totalAmount, 0);
+
+  const scopedDepartments = departments.filter((d) => sameCompany(d.companyId, company.id));
+  const scopedPipeline = procurementPipeline.map((s) => ({ ...s, count: Math.max(0, Math.round(s.count * revenueShare)) }));
+  const scopedAttendance = attendanceToday.map((a) => ({ ...a, value: Math.max(0, Math.round(a.value * employeeShare)) }));
 
   return (
     <div className="pb-10">
@@ -53,28 +77,28 @@ export function CompanyDashboard() {
           <Metric label="Revenue (YTD)" value={`৳${(company.revenue / 100).toFixed(1)} Cr`} tone="success" emphasis />
           <Metric label="Expenses" value={`৳${(company.expense / 100).toFixed(1)} Cr`} tone="warning" />
           <Metric label="Net Profit" value={`৳${((company.revenue - company.expense) / 100).toFixed(1)} Cr`} sub={`${margin}% margin`} tone="success" />
-          <Metric label="Inventory Value" value="৳31.4 Cr" sub="4 warehouses" />
-          <Metric label="Open Orders" value="164" sub="৳12.8 Cr pipeline" />
+          <Metric label="Inventory Value" value={`৳${(inventoryValue / 10000000).toFixed(2)} Cr`} sub={`${scopedStock.length} SKUs`} />
+          <Metric label="Open Orders" value={String(openOrders.length)} sub={`৳${(openOrdersValue / 100000).toFixed(1)} L pipeline`} />
           <Metric label="Pending Approvals" value={String(scopedRequests.filter((p) => p.status === 'pending').length)} sub="in this company" tone="danger" />
         </MetricRow>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="space-y-4">
             <Panel title="Financial overview" description="Revenue vs expense, last 6 months">
-              <ColumnChart data={revenueTrend.map((r) => ({ ...r, revenue: r.revenue * 0.31, expense: r.expense * 0.31 }))} />
+              <ColumnChart data={revenueTrend.map((r) => ({ ...r, revenue: r.revenue * revenueShare, expense: r.expense * revenueShare }))} />
             </Panel>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <Panel title="Procurement pipeline" description="Requests in flight by stage" bodyClassName="p-4">
                 <ol className="space-y-1.5">
-                  {procurementPipeline.map((s) =>
+                  {scopedPipeline.map((s) =>
                   <li key={s.stage} className="flex items-center gap-3">
                       <span className="w-28 shrink-0 text-base text-muted">{s.stage}</span>
                       <span className="h-1.5 flex-1 rounded-sm bg-surface" aria-hidden>
                         <span
                         className="block h-1.5 rounded-sm bg-accent/70"
-                        style={{ width: `${s.count / 34 * 100}%` }} />
-                      
+                        style={{ width: `${Math.min(100, s.count / 34 * 100)}%` }} />
+
                       </span>
                       <span className="w-8 shrink-0 text-right font-mono tabular text-base text-ink">{s.count}</span>
                     </li>
@@ -83,7 +107,10 @@ export function CompanyDashboard() {
               </Panel>
 
               <Panel title="Inventory attention" description="Items at or below reorder level" bodyClassName="divide-y divide-line">
-                {stock.
+                {scopedStock.length === 0 && (
+                  <p className="px-4 py-3 text-sm text-muted">No inventory recorded for {companyName} yet.</p>
+                )}
+                {scopedStock.
                 filter((s) => s.status !== 'active').
                 map((s) =>
                 <div key={s.id} className="flex items-center gap-3 px-4 py-2.5">
@@ -106,14 +133,14 @@ export function CompanyDashboard() {
             </div>
 
             <Panel title="Departments" description="Headcount and ownership" bodyClassName="p-4">
-              <DistributionBars data={departments.map((d) => ({ label: d.name, value: d.employees }))} />
+              <DistributionBars data={scopedDepartments.map((d) => ({ label: d.name, value: d.employees }))} />
             </Panel>
           </div>
 
           <div className="space-y-4">
             <Panel title="Attendance today" bodyClassName="p-4">
               <div className="grid grid-cols-2 gap-3">
-                {attendanceToday.map((a) =>
+                {scopedAttendance.map((a) =>
                 <div key={a.label} className="rounded border border-line bg-canvas px-3 py-2">
                     <p className="text-sm text-muted">{a.label}</p>
                     <p

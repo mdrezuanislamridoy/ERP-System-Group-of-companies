@@ -179,6 +179,7 @@ export const suppliers: Supplier[] = [
 export let stock: StockItem[] = [
   {
     id: 's1',
+    companyId: 'c-foods',
     product: 'Rice — Premium Grade (50kg)',
     sku: 'RM-RICE-050',
     warehouse: 'Savar Plant WH-01',
@@ -197,6 +198,7 @@ export let stock: StockItem[] = [
   },
   {
     id: 's2',
+    companyId: 'c-foods',
     product: 'Edible Oil — Soybean (20L)',
     sku: 'RM-OIL-020',
     warehouse: 'Savar Plant WH-01',
@@ -215,6 +217,7 @@ export let stock: StockItem[] = [
   },
   {
     id: 's3',
+    companyId: 'c-foods',
     product: 'Packaging Film — 80 micron',
     sku: 'PK-FILM-080',
     warehouse: 'Gazipur Plant II',
@@ -233,6 +236,7 @@ export let stock: StockItem[] = [
   },
   {
     id: 's4',
+    companyId: 'c-foods',
     product: 'Wheat Flour — Fine (25kg)',
     sku: 'RM-FLR-025',
     warehouse: 'Chattogram DC',
@@ -251,6 +255,7 @@ export let stock: StockItem[] = [
   },
   {
     id: 's5',
+    companyId: 'c-foods',
     product: 'Sugar — Refined (50kg)',
     sku: 'RM-SGR-050',
     warehouse: 'Chattogram DC',
@@ -269,6 +274,7 @@ export let stock: StockItem[] = [
   },
   {
     id: 's6',
+    companyId: 'c-foods',
     product: 'Pallet — Euro Standard',
     sku: 'PK-PLT-EU',
     warehouse: 'Savar Plant WH-02',
@@ -287,6 +293,7 @@ export let stock: StockItem[] = [
   },
   {
     id: 's7',
+    companyId: 'c-foods',
     product: 'Carton Box — 12×8×6',
     sku: 'PK-BOX-1286',
     warehouse: 'Gazipur Plant II',
@@ -301,6 +308,82 @@ export let stock: StockItem[] = [
     unit: 'Box',
     unitCost: 157,
     value: 2480600,
+    status: 'active'
+  },
+  {
+    id: 's8',
+    companyId: 'c-transport',
+    product: 'Diesel Fuel (Bulk)',
+    sku: 'FL-DSL-BLK',
+    warehouse: 'Tejgaon Fleet Depot',
+    onHand: 18500,
+    reserved: 2000,
+    quarantineQty: 0,
+    inTransitQty: 0,
+    atp: 16500,
+    available: 16500,
+    incoming: 5000,
+    reorder: 8000,
+    unit: 'Litre',
+    unitCost: 124,
+    value: 2294000,
+    status: 'active'
+  },
+  {
+    id: 's9',
+    companyId: 'c-transport',
+    product: 'Truck Tyres — Heavy Duty',
+    sku: 'FL-TYR-HD',
+    warehouse: 'Tejgaon Fleet Depot',
+    onHand: 64,
+    reserved: 12,
+    quarantineQty: 2,
+    inTransitQty: 0,
+    atp: 50,
+    available: 50,
+    incoming: 24,
+    reorder: 40,
+    unit: 'Unit',
+    unitCost: 18500,
+    value: 1184000,
+    status: 'low-stock'
+  },
+  {
+    id: 's10',
+    companyId: 'c-tech',
+    product: 'Laptops — Engineering Standard Issue',
+    sku: 'IT-LPT-ENG',
+    warehouse: 'Gulshan Tech HQ Store',
+    onHand: 85,
+    reserved: 10,
+    quarantineQty: 0,
+    inTransitQty: 20,
+    atp: 75,
+    available: 75,
+    incoming: 20,
+    reorder: 30,
+    unit: 'Unit',
+    unitCost: 98000,
+    value: 8330000,
+    status: 'active'
+  },
+  {
+    id: 's11',
+    companyId: 'c-tech',
+    product: 'Network Switches — 48-port',
+    sku: 'IT-NSW-48P',
+    warehouse: 'Gulshan Tech HQ Store',
+    onHand: 14,
+    reserved: 2,
+    quarantineQty: 0,
+    inTransitQty: 0,
+    atp: 12,
+    available: 12,
+    incoming: 0,
+    reorder: 6,
+    unit: 'Unit',
+    unitCost: 42000,
+    value: 588000,
     status: 'active'
   }
 ];
@@ -2081,6 +2164,7 @@ export function receiveStockTransferOrder(params: {
       const unitCost = srcStock?.unitCost || 1000;
       const newStockItem: StockItem = {
         id: `s-dest-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        companyId: sto.destCompanyId || sto.companyId,
         product: l.product,
         sku: l.sku,
         warehouse: sto.destWarehouseName,

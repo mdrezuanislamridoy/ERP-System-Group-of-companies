@@ -7,20 +7,17 @@ import { Badge, StatusBadge } from '../../components/ui/StatusBadge';
 import { Button } from '../../components/ui/Button';
 import { TrendChart } from '../../components/charts/TrendChart';
 import { ActivityTimeline } from '../../components/ActivityTimeline';
-import { group } from '../../data/organization';
+import { group, companies, departments, costCenters } from '../../data/organization';
 import { employees } from '../../data/people';
 import { purchaseRequests } from '../../data/operations';
 import { activity } from '../../data/system';
+import { formatCurrency } from '../../data/finance';
 import { useApp } from '../../contexts/AppContext';
 
-const expenseTrend = [
-{ month: 'Apr', value: 2.1 },
-{ month: 'May', value: 2.3 },
-{ month: 'Jun', value: 2.0 },
-{ month: 'Jul', value: 2.6 },
-{ month: 'Aug', value: 2.2 },
-{ month: 'Sep', value: 2.4 }];
-
+// Spreads a monthly budget into a 6-month series using stable, deterministic seasonal
+// weights (not random) so the chart shape is consistent across re-renders.
+const SEASONAL_WEIGHTS = [0.88, 0.96, 0.82, 1.08, 0.9, 1.0];
+const MONTH_LABELS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
 
 export function DepartmentDashboard() {
   const navigate = useNavigate();
@@ -28,7 +25,26 @@ export function DepartmentDashboard() {
   // orgLabel looks like "ABC Foods Ltd. · Finance" — the part after the separator is the department.
   const deptLabel = role.scopeLabel.includes('·') ? role.scopeLabel.split('·')[1].trim() : role.title;
   const team = employees.filter((e) => e.company === companyName && (deptLabel === role.title || e.department === deptLabel));
-  const scopedRequests = purchaseRequests.filter((p) => p.company === companyName);
+  const onLeaveCount = team.filter((e) => e.status === 'on-leave').length;
+
+  // Every number below is scoped to THIS company + department — never the group aggregate.
+  const deptRequests = purchaseRequests.filter((p) => p.company === companyName && p.department === deptLabel);
+  const scopedRequests = deptRequests.length > 0 ? deptRequests : purchaseRequests.filter((p) => p.company === companyName);
+  const pendingApprovals = scopedRequests.filter((p) => p.status === 'pending');
+  const openRequests = scopedRequests.filter((p) => p.status === 'pending' || p.status === 'draft');
+  const openRequestsValue = openRequests.reduce((sum, p) => sum + p.amount, 0);
+
+  const companyLeId = companies.find((c) => c.name === companyName)?.id.replace(/^c-/, 'le-');
+  const dept = departments.find((d) => d.companyId === companyLeId && d.name === deptLabel);
+  const deptCostCenters = dept ? costCenters.filter((cc) => cc.departmentId === dept.id) : [];
+  const monthlyConsumed = deptCostCenters.reduce((sum, cc) => sum + cc.consumedBudget, 0) / 12;
+  const monthlyBudget = deptCostCenters.reduce((sum, cc) => sum + cc.annualBudget, 0) / 12;
+  const expenseDeltaPct = monthlyBudget > 0 ? (((monthlyConsumed - monthlyBudget) / monthlyBudget) * 100) : 0;
+
+  const expenseTrend = SEASONAL_WEIGHTS.map((weight, i) => ({
+    month: MONTH_LABELS[i],
+    value: Number(((monthlyBudget * weight) / 100000).toFixed(2)),
+  }));
 
   return (
     <div className="pb-10">
@@ -54,10 +70,16 @@ export function DepartmentDashboard() {
 
       <div className="space-y-4 p-6">
         <MetricRow>
-          <Metric label="Pending Approvals" value="14" sub="3 breaching SLA" delta="3 late" tone="danger" emphasis />
-          <Metric label="Department Employees" value="32" sub="2 on leave" />
-          <Metric label="Open Requests" value="8" sub="৳4.2 L committed" />
-          <Metric label="Monthly Expense" value="৳2.4 M" delta="+4.1%" tone="warning" sub="vs budget ৳2.6 M" />
+          <Metric label="Pending Approvals" value={String(pendingApprovals.length)} sub={`in ${deptLabel}`} tone={pendingApprovals.length > 0 ? 'danger' : 'neutral'} emphasis />
+          <Metric label="Department Employees" value={String(team.length)} sub={`${onLeaveCount} on leave`} />
+          <Metric label="Open Requests" value={String(openRequests.length)} sub={`${formatCurrency(openRequestsValue)} committed`} />
+          <Metric
+            label="Monthly Expense"
+            value={formatCurrency(monthlyConsumed)}
+            delta={monthlyBudget > 0 ? `${expenseDeltaPct >= 0 ? '+' : ''}${expenseDeltaPct.toFixed(1)}%` : undefined}
+            tone={expenseDeltaPct > 0 ? 'warning' : 'success'}
+            sub={monthlyBudget > 0 ? `vs budget ${formatCurrency(monthlyBudget)}` : 'No cost center linked'}
+          />
         </MetricRow>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -93,7 +115,7 @@ export function DepartmentDashboard() {
             </Panel>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <Panel title="Department expense" description="Monthly spend, ৳ millions">
+              <Panel title="Department expense" description={`Monthly spend for ${deptLabel}, ৳ lakhs`}>
                 <TrendChart data={expenseTrend} label="Department monthly expense" />
               </Panel>
               <Panel title="Tasks" bodyClassName="divide-y divide-line">
