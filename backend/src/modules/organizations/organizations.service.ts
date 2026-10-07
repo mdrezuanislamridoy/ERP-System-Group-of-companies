@@ -62,11 +62,23 @@ export class OrganizationsService extends ScopedRepository {
   // ─── QUERY OPERATIONS ──────────────────────────────────────────────────────
 
   /**
-   * Returns full multi-level tree structure of the group.
+   * Returns the multi-level tree structure the caller is authorized to see.
+   * Group-scoped callers (allowedCompanyIds includes '*') get the full group root;
+   * company-scoped callers get their own legal-entity node as the root instead.
    */
-  async getHierarchyTree() {
+  async getHierarchyTree(ctx: RequestContext) {
+    const isGroupScope = ctx.scope?.allowedCompanyIds.includes('*') ?? false;
+    const rootId = isGroupScope ? undefined : ctx.scope?.activeCompanyId;
+
+    if (!isGroupScope && !rootId) {
+      throw new ForbiddenException({
+        code: 'ERR_ABAC_COMPANY_ISOLATION',
+        message: 'No authorized company scope to resolve an organization tree root.',
+      });
+    }
+
     const root = await this.prisma.organization.findFirst({
-      where: { parentId: null, deletedAt: null },
+      where: rootId ? { id: rootId, deletedAt: null } : { parentId: null, deletedAt: null },
       include: {
         children: {
           where: { deletedAt: null },
@@ -89,11 +101,18 @@ export class OrganizationsService extends ScopedRepository {
   }
 
   /**
-   * Returns sister concerns with activated modules, unit counts and financial metrics.
+   * Returns sister concerns with activated modules, unit counts and financial metrics —
+   * restricted to the caller's authorized companies unless they hold group-level ('*') scope.
    */
-  async getCompanies() {
+  async getCompanies(ctx: RequestContext) {
+    const isGroupScope = ctx.scope?.allowedCompanyIds.includes('*') ?? false;
+
     return this.prisma.organization.findMany({
-      where: { type: 'LEGAL_ENTITY', deletedAt: null },
+      where: {
+        type: 'LEGAL_ENTITY',
+        deletedAt: null,
+        ...(isGroupScope ? {} : { id: { in: ctx.scope?.allowedCompanyIds ?? [] } }),
+      },
       include: {
         modules: true,
         children: {
@@ -129,9 +148,10 @@ export class OrganizationsService extends ScopedRepository {
   }
 
   /**
-   * Returns single organization node detail with children and modules.
+   * Returns single organization node detail with children and modules,
+   * provided the node falls within the caller's authorized company scope.
    */
-  async getNodeById(id: string) {
+  async getNodeById(id: string, ctx: RequestContext) {
     const node = await this.prisma.organization.findUnique({
       where: { id },
       include: {
@@ -146,6 +166,18 @@ export class OrganizationsService extends ScopedRepository {
     if (!node || node.deletedAt) {
       throw new NotFoundException(`Organization node with ID ${id} not found`);
     }
+
+    const nodeCompanyId = node.companyId || (node.type === 'LEGAL_ENTITY' ? node.id : undefined);
+    if (nodeCompanyId) {
+      this.assertCompanyAccess(ctx, nodeCompanyId, 'view organization node');
+    } else if (!ctx.scope?.allowedCompanyIds.includes('*')) {
+      // Group root or other company-less node: only group-scoped callers may view it.
+      throw new ForbiddenException({
+        code: 'GROUP_SCOPE_REQUIRED',
+        message: 'Viewing this organization node requires group-level executive authorization.',
+      });
+    }
+
     return node;
   }
 

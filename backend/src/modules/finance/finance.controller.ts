@@ -18,8 +18,7 @@ export class FinanceController {
   @ApiOperation({ summary: 'Get Chart of Accounts' })
   @RequirePermissions('finance.gl.read')
   async getAccounts(@Req() req: Request) {
-    const companyId = req.context?.scope?.activeCompanyId || undefined;
-    return this.financeService.getChartOfAccounts(companyId);
+    return this.financeService.getChartOfAccounts(req.context!);
   }
 
   @Get('journals')
@@ -40,7 +39,6 @@ export class FinanceController {
   @ApiOperation({ summary: 'Generate calculated trial balance' })
   @RequirePermissions('finance.gl.read')
   async getTrialBalance(@Req() req: Request, @Query('companyId') companyIdQuery?: string) {
-    const companyId = companyIdQuery || req.context?.scope?.activeCompanyId || 'c-foods';
-    return this.financeService.getTrialBalance(companyId);
+    return this.financeService.getTrialBalance(companyIdQuery, req.context!);
   }
 }

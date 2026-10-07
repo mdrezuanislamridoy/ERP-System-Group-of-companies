@@ -91,6 +91,11 @@ export class JwtAuthGuard implements CanActivate {
     let activeAssignment = user.assignments.find(
       (a) => a.organizationId === requestedOrgId || a.companyId === requestedOrgId,
     );
+    // Tracks whether requestedOrgId was actually proven to be within the resolved assignment's
+    // scope (direct match or confirmed SUBTREE descendant) — only then is it safe to use as
+    // effectiveOrgId. Otherwise we must fall back to the assignment's own organizationId rather
+    // than silently trusting the unvalidated client-supplied header/claim.
+    let requestedOrgValidated = Boolean(activeAssignment);
 
     // If requestedOrgId wasn't a direct match, check if it's within a SUBTREE assignment
     if (!activeAssignment && requestedOrgId) {
@@ -106,6 +111,7 @@ export class JwtAuthGuard implements CanActivate {
           });
           if (closure) {
             activeAssignment = a;
+            requestedOrgValidated = true;
             break;
           }
         }
@@ -124,7 +130,7 @@ export class JwtAuthGuard implements CanActivate {
       });
     }
 
-    const effectiveOrgId = requestedOrgId || activeAssignment.organizationId;
+    const effectiveOrgId = requestedOrgValidated ? requestedOrgId : activeAssignment.organizationId;
 
     // 5. Expand Closure Descendant Set
     const closureRows = await this.prisma.organizationClosure.findMany({

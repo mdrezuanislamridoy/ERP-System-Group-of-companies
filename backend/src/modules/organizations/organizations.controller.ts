@@ -32,17 +32,17 @@ export class OrganizationsController {
   // ─── READ QUERIES ──────────────────────────────────────────────────────────
 
   @Get('tree')
-  @ApiOperation({ summary: 'Get full organizational hierarchy tree (Group -> Companies -> Plants/Branches -> Depts)' })
+  @ApiOperation({ summary: 'Get organizational hierarchy tree scoped to caller (full group tree for group-level roles, own company subtree otherwise)' })
   @RequirePermissions('org.read')
-  async getTree() {
-    return this.orgService.getHierarchyTree();
+  async getTree(@Req() req: Request) {
+    return this.orgService.getHierarchyTree(req.context!);
   }
 
   @Get('companies')
-  @ApiOperation({ summary: 'Get list of all legal entities / sister concerns' })
+  @ApiOperation({ summary: 'Get list of legal entities / sister concerns the caller is authorized to see' })
   @RequirePermissions('org.read')
-  async getCompanies() {
-    return this.orgService.getCompanies();
+  async getCompanies(@Req() req: Request) {
+    return this.orgService.getCompanies(req.context!);
   }
 
   @Get('nodes')
@@ -55,8 +55,8 @@ export class OrganizationsController {
   @Get('nodes/:id')
   @ApiOperation({ summary: 'Get specific organization node details' })
   @RequirePermissions('org.read')
-  async getNodeById(@Param('id') id: string) {
-    return this.orgService.getNodeById(id);
+  async getNodeById(@Param('id') id: string, @Req() req: Request) {
+    return this.orgService.getNodeById(id, req.context!);
   }
 
   // ─── COMPANY (LEGAL ENTITY) MANAGEMENT ─────────────────────────────────────

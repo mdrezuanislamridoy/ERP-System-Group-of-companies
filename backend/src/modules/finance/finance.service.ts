@@ -18,10 +18,12 @@ export class FinanceService extends ScopedRepository {
     super();
   }
 
-  async getChartOfAccounts(companyId?: string) {
+  async getChartOfAccounts(ctx: RequestContext) {
+    const isGroupScope = ctx.scope?.allowedCompanyIds.includes('*') ?? false;
     const where: any = {};
-    if (companyId) {
-      where.OR = [{ companyId }, { companyId: null }];
+
+    if (!isGroupScope) {
+      where.OR = [{ companyId: { in: ctx.scope?.allowedCompanyIds ?? [] } }, { companyId: null }];
     }
 
     return this.prisma.account.findMany({
@@ -139,7 +141,18 @@ export class FinanceService extends ScopedRepository {
     return journal;
   }
 
-  async getTrialBalance(companyId: string) {
+  async getTrialBalance(companyIdQuery: string | undefined, ctx: RequestContext) {
+    if (!ctx.scope) {
+      throw new UnauthorizedException('Authentication context required');
+    }
+
+    const companyId = companyIdQuery || ctx.scope.activeCompanyId;
+    if (!companyId) {
+      throw new BadRequestException('A companyId must be specified or resolvable from your active scope.');
+    }
+
+    this.abacPolicy.assertCompanyScope(ctx.scope, companyId, 'read trial balance for');
+
     const accounts = await this.prisma.account.findMany({
       where: {
         OR: [{ companyId }, { companyId: null }],

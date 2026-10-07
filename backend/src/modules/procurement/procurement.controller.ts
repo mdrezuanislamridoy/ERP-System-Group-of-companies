@@ -37,6 +37,7 @@ export class ProcurementController {
 
   @Get('suppliers')
   @ApiOperation({ summary: 'Get list of registered suppliers' })
+  @RequirePermissions('procurement.suppliers.read')
   async getSuppliers() {
     return this.procurementService.getSuppliers();
   }

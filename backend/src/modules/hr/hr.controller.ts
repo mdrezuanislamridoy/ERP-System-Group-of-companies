@@ -69,8 +69,8 @@ export class HrController {
   @Get('payroll/salary-structure/:personId')
   @ApiOperation({ summary: "Get an employee's salary structure (HR/Finance view)" })
   @RequirePermissions('hr.payroll.read')
-  async getSalaryStructure(@Param('personId') personId: string) {
-    return this.payrollService.getSalaryStructure(personId);
+  async getSalaryStructure(@Param('personId') personId: string, @Req() req: Request) {
+    return this.payrollService.getSalaryStructure(personId, req.context!);
   }
 
   @Put('payroll/salary-structure/:personId')

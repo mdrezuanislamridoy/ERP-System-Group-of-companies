@@ -22,8 +22,16 @@ export class IamService {
 
   async getUsers(ctx: RequestContext) {
     const canReadSensitive = ctx.user?.permissions.includes('sensitive.salary.read');
+    const isGroupScope = ctx.scope?.allowedCompanyIds.includes('*') ?? false;
 
     const users = await this.prisma.user.findMany({
+      where: isGroupScope
+        ? undefined
+        : {
+            assignments: {
+              some: { companyId: { in: ctx.scope?.allowedCompanyIds ?? [] } },
+            },
+          },
       include: {
         person: true,
         assignments: {
@@ -75,7 +83,6 @@ export class IamService {
     // 1. Authorization & Role Verification
     const isGroupAdmin = callerScope.roleKey === 'group-super-admin' || callerScope.roleKey === 'group-ceo';
     const isCompanyExecOrHr =
-      callerScope.roleKey === 'company-ceo' ||
       callerScope.roleKey === 'company-cfo' ||
       callerScope.roleKey === 'group-cfo' ||
       ctx.user.permissions.includes('iam.user.create') ||

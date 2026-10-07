@@ -39,12 +39,26 @@ export class PayrollService extends ScopedRepository {
     super();
   }
 
-  async getSalaryStructure(personId: string) {
+  /** Resolves a person's company via their active assignment and enforces caller company scope. */
+  private assertPersonInScope(
+    person: { user: { assignments: { companyId: string | null }[] } | null },
+    ctx: RequestContext,
+    action: string,
+  ) {
+    const employeeCompanyId = person.user?.assignments.find((a) => a.companyId)?.companyId;
+    if (ctx.scope && employeeCompanyId) {
+      this.abacPolicy.assertCompanyScope(ctx.scope, employeeCompanyId, action);
+    }
+  }
+
+  async getSalaryStructure(personId: string, ctx?: RequestContext) {
     const person = await this.prisma.person.findUnique({
       where: { id: personId },
-      include: { salaryStructure: true },
+      include: { salaryStructure: true, user: { include: { assignments: true } } },
     });
     if (!person) throw new NotFoundException('Employee not found.');
+    if (ctx) this.assertPersonInScope(person, ctx, 'view salary structure for employees in');
+
     if (person.salaryStructure) return person.salaryStructure;
     if (person.baseSalary == null) return null;
 
@@ -64,8 +78,12 @@ export class PayrollService extends ScopedRepository {
   }
 
   async upsertSalaryStructure(personId: string, dto: UpsertSalaryStructureDto, ctx: RequestContext) {
-    const person = await this.prisma.person.findUnique({ where: { id: personId } });
+    const person = await this.prisma.person.findUnique({
+      where: { id: personId },
+      include: { user: { include: { assignments: true } } },
+    });
     if (!person) throw new NotFoundException('Employee not found.');
+    this.assertPersonInScope(person, ctx, 'manage salary structure for employees in');
 
     const grossMonthly = dto.basic + dto.houseRent + dto.medical + dto.conveyance + dto.other;
     if (grossMonthly <= 0) {

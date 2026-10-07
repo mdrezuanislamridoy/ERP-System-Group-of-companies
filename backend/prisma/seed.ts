@@ -263,6 +263,9 @@ async function main() {
     { key: 'hr.attendance.read', moduleKey: 'HR', resource: 'attendance', action: 'read' },
     { key: 'hr.payroll.read', moduleKey: 'HR', resource: 'payroll', action: 'read' },
     { key: 'hr.payroll.manage', moduleKey: 'HR', resource: 'payroll', action: 'manage', isSensitive: true },
+    { key: 'workflow.approvals.read', moduleKey: 'WORKFLOW', resource: 'approval', action: 'read' },
+    { key: 'workflow.approvals.action', moduleKey: 'WORKFLOW', resource: 'approval', action: 'action' },
+    { key: 'procurement.suppliers.read', moduleKey: 'PROCUREMENT', resource: 'supplier', action: 'read' },
   ];
 
   for (const p of permissions) {
@@ -279,12 +282,20 @@ async function main() {
       perms: permissions.map((p) => p.key),
     },
     {
+      key: 'group-super-admin',
+      name: 'Group IT Super Administrator',
+      level: 'GROUP',
+      isSystem: true,
+      attributes: { financialApprovalLimit: 999999999 },
+      perms: permissions.map((p) => p.key),
+    },
+    {
       key: 'group-cfo',
       name: 'Group Chief Financial Officer',
       level: 'GROUP',
       isSystem: true,
       attributes: { financialApprovalLimit: 50000000 },
-      perms: ['org.read', 'finance.gl.read', 'finance.gl.post', 'finance.approval.level1', 'audit.logs.read', 'sensitive.salary.read', 'hr.attendance.read', 'hr.payroll.read', 'hr.payroll.manage'],
+      perms: ['org.read', 'finance.gl.read', 'finance.gl.post', 'finance.approval.level1', 'audit.logs.read', 'sensitive.salary.read', 'hr.attendance.read', 'hr.payroll.read', 'hr.payroll.manage', 'workflow.approvals.read', 'workflow.approvals.action', 'procurement.suppliers.read'],
     },
     {
       key: 'company-cfo',
@@ -292,7 +303,7 @@ async function main() {
       level: 'COMPANY',
       isSystem: true,
       attributes: { financialApprovalLimit: 2500000 },
-      perms: ['org.read', 'finance.gl.read', 'finance.gl.post', 'finance.approval.level1', 'procurement.pr.approve', 'sensitive.salary.read', 'hr.payroll.read', 'hr.payroll.manage'],
+      perms: ['org.read', 'finance.gl.read', 'finance.gl.post', 'finance.approval.level1', 'procurement.pr.approve', 'sensitive.salary.read', 'hr.payroll.read', 'hr.payroll.manage', 'workflow.approvals.read', 'workflow.approvals.action', 'procurement.suppliers.read'],
     },
     {
       key: 'procurement-officer',
@@ -300,7 +311,7 @@ async function main() {
       level: 'COMPANY',
       isSystem: true,
       attributes: { financialApprovalLimit: 500000 },
-      perms: ['org.read', 'procurement.pr.create', 'procurement.pr.approve', 'procurement.po.create', 'inventory.stock.read'],
+      perms: ['org.read', 'procurement.pr.create', 'procurement.pr.approve', 'procurement.po.create', 'inventory.stock.read', 'workflow.approvals.read', 'procurement.suppliers.read'],
     },
     {
       key: 'auditor',
@@ -308,7 +319,7 @@ async function main() {
       level: 'GROUP',
       isSystem: true,
       attributes: { readOnly: true },
-      perms: ['org.read', 'finance.gl.read', 'inventory.stock.read', 'audit.logs.read'],
+      perms: ['org.read', 'finance.gl.read', 'inventory.stock.read', 'audit.logs.read', 'workflow.approvals.read', 'procurement.suppliers.read'],
     },
   ];
 
