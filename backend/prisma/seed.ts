@@ -258,6 +258,7 @@ async function main() {
     { key: 'inventory.stock.read', moduleKey: 'INVENTORY', resource: 'stock', action: 'read' },
     { key: 'inventory.stock.move', moduleKey: 'INVENTORY', resource: 'stock', action: 'move' },
     { key: 'iam.user.create', moduleKey: 'IAM', resource: 'user', action: 'create' },
+    { key: 'iam.roles.manage', moduleKey: 'IAM', resource: 'role', action: 'manage', isSensitive: true },
     { key: 'audit.logs.read', moduleKey: 'GOVERNANCE', resource: 'audit_log', action: 'read' },
     { key: 'sensitive.salary.read', moduleKey: 'HR', resource: 'salary', action: 'read', isSensitive: true },
     { key: 'hr.attendance.read', moduleKey: 'HR', resource: 'attendance', action: 'read' },

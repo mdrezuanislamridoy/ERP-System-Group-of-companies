@@ -15,9 +15,6 @@ build/
 **/*.tsbuildinfo
 
 # Environment Variables & Secrets
-.env
-**/.env
-.env.local
 **/.env.local
 .env.*.local
 **/.env.*.local
@@ -43,7 +40,6 @@ lerna-debug.log*
 *.db-journal
 
 # IDEs & Editors
-.vscode/*
 !.vscode/extensions.json
 .idea/
 **/.idea/
@@ -71,4 +67,4 @@ temp/
 .cache/
 **/.cache/
 .vercel
-.env*
+config.bat

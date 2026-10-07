@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
 import { IamService } from './iam.service';
 import { CreateEmployeeUserDto } from './dto/create-employee-user.dto';
+import { UpdateRolePermissionsDto } from './dto/update-role-permissions.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -42,5 +43,16 @@ export class IamController {
   @RequirePermissions('org.read')
   async getPermissions() {
     return this.iamService.getPermissions();
+  }
+
+  @Patch('roles/:id/permissions')
+  @ApiOperation({ summary: "Replace a role's permission set (admin permission assignment)" })
+  @RequirePermissions('iam.roles.manage')
+  async updateRolePermissions(
+    @Param('id') id: string,
+    @Body() dto: UpdateRolePermissionsDto,
+    @Req() req: Request,
+  ) {
+    return this.iamService.updateRolePermissions(id, dto, req.context!);
   }
 }

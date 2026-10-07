@@ -192,6 +192,13 @@ export const iamApi = {
   getPermissions: async () => {
     return request<any[]>('/iam/permissions');
   },
+
+  updateRolePermissions: async (roleId: string, permissionKeys: string[]) => {
+    return request<any>(`/iam/roles/${roleId}/permissions`, {
+      method: 'PATCH',
+      body: JSON.stringify({ permissionKeys }),
+    });
+  },
 };
 
 export const orgApi = {
